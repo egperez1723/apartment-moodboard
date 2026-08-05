@@ -65,6 +65,26 @@
   .date-editor input{ font-family:'Work Sans', sans-serif; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background: var(--cream); }
   .date-editor button{ font-family:'Work Sans', sans-serif; font-weight:600; font-size:12px; background: var(--sage-dark); color:white; border:none; border-radius:8px; padding:7px 12px; cursor:pointer; }
 
+  .info-card{
+    background: var(--paper);
+    border: 2px dashed var(--lavender);
+    border-radius: 18px;
+    padding: 16px 20px;
+    max-width: 380px;
+    margin: 0 auto 22px auto;
+    position: relative;
+  }
+  .info-card-title{ font-family:'Fraunces', serif; font-style:italic; font-size:17px; text-align:center; margin-bottom:10px; }
+  .info-row{ display:flex; gap:8px; font-size:13px; padding:5px 0; border-bottom:1px dashed var(--line); }
+  .info-row:last-child{ border-bottom:none; }
+  .info-label{ color:var(--ink-soft); min-width:92px; flex-shrink:0; }
+  .info-value{ color:var(--ink); word-break:break-word; }
+  .info-editbtn{ position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:50%; background: var(--cream); border: 1.5px solid var(--sage-dark); color:var(--sage-dark); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+  .info-editbtn svg{ width:13px; height:13px; }
+  .info-empty{ text-align:center; font-size:12px; color:var(--ink-soft); font-style:italic; }
+  .info-modal input{ width:100%; font-family:'Work Sans', sans-serif; font-size:14px; padding:9px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); margin-bottom:10px; }
+  .info-field-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:1px; margin:2px 0 4px 0; }
+
   .new-cat-row{ display:flex; gap:8px; margin-bottom: 26px; justify-content:center; align-items:center; }
   .round-plus{ width:34px; height:34px; border-radius:50%; border:2px solid var(--terracotta); background:var(--paper); color:var(--terracotta); font-size:17px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
   .modal-overlay{ position:fixed; inset:0; background:rgba(74,63,49,0.35); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px; }
@@ -86,8 +106,10 @@
   .cat-name{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size: 24px; cursor: text; border-bottom: 2px solid var(--butter); padding-bottom: 1px; }
   .cat-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
   .cat-meta{ font-size:11px; color: var(--ink-soft); }
-  .cat-del{ font-size: 11px; color: var(--ink-soft); cursor:pointer; margin-left:auto; }
-  .cat-del:hover{ color: var(--terracotta); }
+  .cat-edit-row{ display:flex; justify-content:flex-end; margin: -8px 0 12px 0; }
+  .cat-edit-toggle{ width:30px; height:30px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; font-family:'Work Sans', sans-serif; font-weight:600; }
+  .cat-edit-toggle svg{ width:14px; height:14px; }
+  .cat-del-icon{ width:22px; height:22px; border-radius:50%; background:var(--terracotta); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; margin-left:auto; flex-shrink:0; }
 
   .cards-grid{ column-count: 2; column-gap: 14px; padding-top: 16px; }
   @media (min-width: 560px){ .cards-grid{ column-count: 3; } }
@@ -208,7 +230,8 @@ function defaultState(){
     title: "senior year, new place",
     moveInDate: null,
     categories: [],
-    bought: []
+    bought: [],
+    info: { unitNumber: '', address: '', storageUnit: '', storageAddress: '' }
   };
 }
 
@@ -218,6 +241,7 @@ function normalizeState(){
   if(!state.categories) state.categories = [];
   if(!state.bought) state.bought = [];
   if(!state.title) state.title = "senior year, new place";
+  if(!state.info) state.info = { unitNumber: '', address: '', storageUnit: '', storageAddress: '' };
 }
 
 async function loadData(){
@@ -307,6 +331,8 @@ function daysUntil(dateStr){
 let editingDate = false;
 let openItemId = null;
 let addingCategory = false;
+let catEditMode = false;
+let editingInfo = false;
 let addingSubFor = null;
 let addingLinkFor = null;
 let addingItemCat = null;
@@ -343,6 +369,7 @@ function render(){
     </header>
   `;
   html += renderCountdown();
+  html += renderInfoCard();
   html += `
     <div class="new-cat-row">
       <span class="round-plus" id="addCatBtn">+</span><span style="font-size:12px; color:var(--ink-soft);">add a category</span>
@@ -363,6 +390,10 @@ function render(){
 
   if(state.categories.length === 0){
     html += `<div class="empty-hint">the board's empty — add a category above to start pinning things</div>`;
+  } else {
+    html += `<div class="cat-edit-row">
+      <span class="cat-edit-toggle" id="catEditToggle">${catEditMode ? 'done' : PENCIL_ICON}</span>
+    </div>`;
   }
 
   state.categories.forEach((cat, catIndex) => {
@@ -373,7 +404,7 @@ function render(){
         <span class="cat-dot" style="background:${cColor};"></span>
         <div class="cat-name hand" contenteditable="true" data-catname="${cat.id}" style="border-bottom-color:${cColor};">${escapeHtml(cat.name)}</div>
         <div class="cat-meta">${items.length} item${items.length===1?'':'s'}</div>
-        <div class="cat-del" data-catdel="${cat.id}">remove category</div>
+        ${catEditMode ? `<span class="cat-del-icon" data-catdel="${cat.id}">✕</span>` : ''}
       </div>
       <div class="cards-grid">`;
 
@@ -564,6 +595,63 @@ function renderCountdown(){
   </div>`;
 }
 
+function formatMoveInDateTime(dateStr){
+  if(!dateStr) return null;
+  const [datePart, timePart] = dateStr.split('T');
+  const [y, m, dd] = datePart.split('-').map(Number);
+  const [hh, mm] = (timePart || '00:00').split(':').map(Number);
+  const d = new Date(y, m-1, dd, hh, mm);
+  const dateFmt = d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+  const timeFmt = d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+  return `${dateFmt}, ${timeFmt}`;
+}
+
+function renderInfoCard(){
+  const info = state.info || {};
+  const rows = [];
+  const moveInFmt = formatMoveInDateTime(state.moveInDate);
+  if(moveInFmt) rows.push(['move-in', moveInFmt]);
+  if(info.unitNumber) rows.push(['unit #', info.unitNumber]);
+  if(info.address) rows.push(['address', info.address]);
+  if(info.storageUnit) rows.push(['storage #', info.storageUnit]);
+  if(info.storageAddress) rows.push(['storage addr', info.storageAddress]);
+
+  let body;
+  if(rows.length === 0){
+    body = `<div class="info-empty">add your unit number, address, and other move-in details</div>`;
+  } else {
+    body = rows.map(([label, val]) => `<div class="info-row"><span class="info-label">${escapeHtml(label)}</span><span class="info-value">${escapeHtml(val)}</span></div>`).join('');
+  }
+
+  let html = `<div class="info-card">
+    <div class="info-card-title">move-in info</div>
+    ${body}
+    <button class="info-editbtn" id="infoEditBtn" title="edit info">${PENCIL_ICON}</button>
+  </div>`;
+
+  if(editingInfo){
+    html += `<div class="modal-overlay" id="infoModalOverlay">
+      <div class="modal-box modal-box-lg info-modal">
+        <div class="modal-title">move-in info</div>
+        <div class="info-field-label">unit number</div>
+        <input type="text" id="infoUnitInput" placeholder="e.g. Apt 204" value="${escapeHtml(info.unitNumber || '')}" />
+        <div class="info-field-label">address</div>
+        <input type="text" id="infoAddressInput" placeholder="street, city, state, zip" value="${escapeHtml(info.address || '')}" />
+        <div class="info-field-label">storage unit number</div>
+        <input type="text" id="infoStorageUnitInput" placeholder="e.g. Unit 118" value="${escapeHtml(info.storageUnit || '')}" />
+        <div class="info-field-label">storage unit address</div>
+        <input type="text" id="infoStorageAddressInput" placeholder="street, city, state, zip" value="${escapeHtml(info.storageAddress || '')}" />
+        <div class="modal-actions" style="margin-top:14px;">
+          <button class="modal-cancel" id="infoCancelBtn">cancel</button>
+          <button class="modal-add" id="infoSaveBtn">save</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return html;
+}
+
 function attachEvents(){
   const titleEdit = document.getElementById('titleEdit');
   if(titleEdit){
@@ -730,7 +818,27 @@ function attachEvents(){
     editingDate = false; render(); saveData();
   };
 
+  const infoEditBtn = document.getElementById('infoEditBtn');
+  if(infoEditBtn) infoEditBtn.onclick = () => { editingInfo = true; render(); };
+  const infoModalOverlay = document.getElementById('infoModalOverlay');
+  if(infoModalOverlay) infoModalOverlay.addEventListener('click', (e) => { if(e.target === infoModalOverlay){ editingInfo = false; render(); } });
+  const infoCancelBtn = document.getElementById('infoCancelBtn');
+  if(infoCancelBtn) infoCancelBtn.onclick = () => { editingInfo = false; render(); };
+  const infoSaveBtn = document.getElementById('infoSaveBtn');
+  if(infoSaveBtn) infoSaveBtn.onclick = () => {
+    state.info = {
+      unitNumber: document.getElementById('infoUnitInput').value.trim(),
+      address: document.getElementById('infoAddressInput').value.trim(),
+      storageUnit: document.getElementById('infoStorageUnitInput').value.trim(),
+      storageAddress: document.getElementById('infoStorageAddressInput').value.trim()
+    };
+    editingInfo = false; render(); saveData();
+  };
+
   document.getElementById('resetLink').onclick = resetAll;
+
+  const catEditToggle = document.getElementById('catEditToggle');
+  if(catEditToggle) catEditToggle.onclick = () => { catEditMode = !catEditMode; render(); };
 
   document.querySelectorAll('[data-catdel]').forEach(el => el.onclick = () => {
     if(!confirm('Remove this whole category and its items?')) return;

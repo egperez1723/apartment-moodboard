@@ -69,21 +69,42 @@
     background: var(--paper);
     border: 2px dashed var(--lavender);
     border-radius: 18px;
-    padding: 16px 20px;
-    max-width: 380px;
-    margin: 0 auto 22px auto;
+    padding: 18px 22px;
+    margin: 0 0 30px 0;
     position: relative;
   }
-  .info-card-title{ font-family:'Fraunces', serif; font-style:italic; font-size:17px; text-align:center; margin-bottom:10px; }
-  .info-row{ display:flex; gap:8px; font-size:13px; padding:5px 0; border-bottom:1px dashed var(--line); }
+  .info-card-title{ font-family:'Fraunces', serif; font-style:italic; font-size:22px; text-align:left; margin-bottom:12px; }
+  .info-row{ display:flex; gap:8px; font-size:14px; padding:7px 0; border-bottom:1px dashed var(--line); }
   .info-row:last-child{ border-bottom:none; }
-  .info-label{ color:var(--ink-soft); min-width:92px; flex-shrink:0; }
+  .info-label{ color:var(--ink-soft); min-width:110px; flex-shrink:0; }
   .info-value{ color:var(--ink); word-break:break-word; }
-  .info-editbtn{ position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:50%; background: var(--cream); border: 1.5px solid var(--sage-dark); color:var(--sage-dark); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
-  .info-editbtn svg{ width:13px; height:13px; }
-  .info-empty{ text-align:center; font-size:12px; color:var(--ink-soft); font-style:italic; }
+  .info-editbtn{ position:absolute; top:14px; right:16px; width:28px; height:28px; border-radius:50%; background: var(--cream); border: 1.5px solid var(--sage-dark); color:var(--sage-dark); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+  .info-editbtn svg{ width:14px; height:14px; }
+  .info-empty{ text-align:left; font-size:13px; color:var(--ink-soft); font-style:italic; }
   .info-modal input{ width:100%; font-family:'Work Sans', sans-serif; font-size:14px; padding:9px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); margin-bottom:10px; }
   .info-field-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:1px; margin:2px 0 4px 0; }
+
+  .quick-section{
+    background: var(--paper);
+    border: 2px dashed var(--butter);
+    border-radius: 18px;
+    padding: 18px 22px;
+    margin: 0 0 34px 0;
+  }
+  .quick-title{ font-family:'Fraunces', serif; font-style:italic; font-size:22px; margin-bottom:2px; }
+  .quick-subtitle{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; }
+  .quick-list{ list-style:none; margin:0 0 10px 0; padding:0; }
+  .quick-item{ display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px dashed var(--line); font-size:14px; }
+  .quick-item:last-child{ border-bottom:none; }
+  .quick-check{ width:19px; height:19px; border-radius:50%; border:1.6px solid var(--sage-dark); background:var(--cream); cursor:pointer; flex-shrink:0; position:relative; }
+  .quick-check.done{ background:var(--sage); border-color:var(--sage-dark); }
+  .quick-check.done::after{ content:""; position:absolute; left:5px; top:1px; width:5px; height:10px; border:solid white; border-width:0 2px 2px 0; transform:rotate(40deg); }
+  .quick-text{ flex:1; cursor:pointer; }
+  .quick-text.done{ text-decoration:line-through; color:var(--ink-soft); }
+  .quick-del{ font-size:13px; color:var(--line); cursor:pointer; }
+  .quick-del:hover{ color:var(--terracotta); }
+  .quick-add-row{ display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .quick-add-row input{ flex:1; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); }
 
   .new-cat-row{ display:flex; gap:8px; margin-bottom: 26px; justify-content:center; align-items:center; }
   .round-plus{ width:34px; height:34px; border-radius:50%; border:2px solid var(--terracotta); background:var(--paper); color:var(--terracotta); font-size:17px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
@@ -231,7 +252,8 @@ function defaultState(){
     moveInDate: null,
     categories: [],
     bought: [],
-    info: { unitNumber: '', address: '', storageUnit: '', storageAddress: '' }
+    info: { unitNumber: '', address: '', storageUnit: '', storageAddress: '' },
+    quickList: []
   };
 }
 
@@ -242,6 +264,7 @@ function normalizeState(){
   if(!state.bought) state.bought = [];
   if(!state.title) state.title = "senior year, new place";
   if(!state.info) state.info = { unitNumber: '', address: '', storageUnit: '', storageAddress: '' };
+  if(!state.quickList) state.quickList = [];
 }
 
 async function loadData(){
@@ -370,6 +393,7 @@ function render(){
   `;
   html += renderCountdown();
   html += renderInfoCard();
+  html += renderQuickList();
   html += `
     <div class="new-cat-row">
       <span class="round-plus" id="addCatBtn">+</span><span style="font-size:12px; color:var(--ink-soft);">add a category</span>
@@ -652,6 +676,30 @@ function renderInfoCard(){
   return html;
 }
 
+function renderQuickList(){
+  const list = state.quickList || [];
+  let html = `<div class="quick-section">
+    <div class="quick-title">quick list</div>
+    <div class="quick-subtitle">stuff you realize you need on the go</div>`;
+
+  if(list.length > 0){
+    html += `<ul class="quick-list">
+      ${list.map(q => `<li class="quick-item">
+        <div class="quick-check ${q.done?'done':''}" data-qtoggle="${q.id}"></div>
+        <div class="quick-text ${q.done?'done':''}" data-qtoggle="${q.id}">${escapeHtml(q.text)}</div>
+        <span class="quick-del" data-qdel="${q.id}">✕</span>
+      </li>`).join('')}
+    </ul>`;
+  }
+
+  html += `<div class="quick-add-row">
+    <input type="text" id="quickAddInput" placeholder="e.g. more hangers…" maxlength="60" />
+    <span class="round-plus" id="quickAddBtn">+</span>
+  </div></div>`;
+
+  return html;
+}
+
 function attachEvents(){
   const titleEdit = document.getElementById('titleEdit');
   if(titleEdit){
@@ -661,6 +709,28 @@ function attachEvents(){
     });
     titleEdit.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); titleEdit.blur(); } });
   }
+
+  document.querySelectorAll('[data-qtoggle]').forEach(el => el.onclick = () => {
+    const q = state.quickList.find(x => x.id === el.getAttribute('data-qtoggle'));
+    if(q){ q.done = !q.done; render(); saveData(); }
+  });
+  document.querySelectorAll('[data-qdel]').forEach(el => el.onclick = () => {
+    state.quickList = state.quickList.filter(x => x.id !== el.getAttribute('data-qdel'));
+    render(); saveData();
+  });
+  function addQuickItem(){
+    const input = document.getElementById('quickAddInput');
+    const text = input.value.trim();
+    if(!text) return;
+    state.quickList.push({id: uid(), text, done:false});
+    render(); saveData();
+    const newInput = document.getElementById('quickAddInput');
+    if(newInput) newInput.focus();
+  }
+  const quickAddBtn = document.getElementById('quickAddBtn');
+  if(quickAddBtn) quickAddBtn.onclick = addQuickItem;
+  const quickAddInput = document.getElementById('quickAddInput');
+  if(quickAddInput) quickAddInput.addEventListener('keydown', e => { if(e.key==='Enter') addQuickItem(); });
 
   const addCatBtn = document.getElementById('addCatBtn');
   if(addCatBtn) addCatBtn.onclick = () => { addingCategory = true; render(); const inp = document.getElementById('newCatInput'); if(inp) inp.focus(); };
@@ -799,9 +869,7 @@ function attachEvents(){
           const parsed = JSON.parse(ev.target.result);
           if(!confirm('Replace your current board with this backup?')) return;
           state = parsed;
-          if(!state.categories) state.categories = [];
-          if(!state.bought) state.bought = [];
-          if(!state.title) state.title = "senior year, new place";
+          normalizeState();
           render(); saveData();
         }catch(err){ alert('That file could not be read as a valid backup.'); }
       };

@@ -822,14 +822,37 @@ function attachEvents(){
     state.todoList = state.todoList.filter(x => x.id !== el.getAttribute('data-tdel'));
     render(); saveData();
   });
+  function wireTodoItem(li, item){
+    li.querySelector('[data-ttoggle].todo-check').onclick = () => { item.done = !item.done; render(); saveData(); };
+    li.querySelector('.todo-text').onclick = () => { item.done = !item.done; render(); saveData(); };
+    li.querySelector('.todo-del').onclick = () => {
+      state.todoList = state.todoList.filter(x => x.id !== item.id);
+      render(); saveData();
+    };
+  }
   function addTodoItem(){
     const input = document.getElementById('todoAddInput');
     const text = input.value.trim();
     if(!text) return;
-    state.todoList.push({id: uid(), text, done:false});
-    render(); saveData();
-    const newInput = document.getElementById('todoAddInput');
-    if(newInput) newInput.focus();
+    const item = {id: uid(), text, done:false};
+    state.todoList.push(item);
+    saveData();
+
+    let list = document.querySelector('.todo-list');
+    if(!list){
+      const section = document.querySelector('.todo-section');
+      list = document.createElement('ul');
+      list.className = 'todo-list';
+      section.insertBefore(list, section.querySelector('.todo-add-row'));
+    }
+    const li = document.createElement('li');
+    li.className = 'todo-item';
+    li.innerHTML = `<div class="todo-check" data-ttoggle="${item.id}"></div><div class="todo-text" data-ttoggle="${item.id}">${escapeHtml(text)}</div><span class="todo-del" data-tdel="${item.id}">✕</span>`;
+    list.appendChild(li);
+    wireTodoItem(li, item);
+
+    input.value = '';
+    input.focus();
   }
   const todoAddBtn = document.getElementById('todoAddBtn');
   if(todoAddBtn) todoAddBtn.onclick = addTodoItem;

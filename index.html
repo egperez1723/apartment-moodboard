@@ -214,6 +214,9 @@
   .sub-text{ flex:1; cursor:pointer; }
   .sub-text.done{ text-decoration:line-through; color:var(--ink-soft); }
   .sub-del{ font-size:11px; color:var(--line); cursor:pointer; }
+  .sub-edit{ color:var(--ink-soft); opacity:0.55; cursor:pointer; display:flex; align-items:center; flex-shrink:0; }
+  .sub-edit svg{ width:12px; height:12px; }
+  .sub-edit-input{ flex:1; font-family:'Work Sans', sans-serif; font-size:13px; padding:5px 8px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); }
   .sub-del:hover{ color:var(--terracotta); }
   .add-sub-row{ display:flex; align-items:center; gap:6px; margin-top:4px; }
   .add-sub-row input{ flex:1; font-size:12px; font-family:'Work Sans', sans-serif; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:var(--cream); }
@@ -396,6 +399,7 @@ let infoCollapsed = false;
 let activeTab = 'board';
 let addingSubFor = null;
 let addingLinkFor = null;
+let editingSubId = null;
 let addingItemCat = null;
 let itemDraft = null;
 let modalAddingSub = false;
@@ -547,9 +551,13 @@ function render(){
 
           <div class="modal-section-label">sub-items</div>
           ${subs.length > 0 ? `<ul class="subitems">
-            ${subs.map(s => `<li class="subitem">
+            ${subs.map(s => editingSubId === s.id ? `<li class="subitem">
+              <input type="text" class="sub-edit-input" id="subEditInput" value="${escapeHtml(s.text)}" maxlength="40" data-item="${openItem.id}" data-cat="${openCat.id}" data-sub="${s.id}" autofocus />
+              <span class="mini-plus" data-subeditconfirm="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}">${CHECK_ICON}</span>
+            </li>` : `<li class="subitem">
               <div class="sub-check ${s.done?'done':''}" data-subtoggle="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}"></div>
               <div class="sub-text ${s.done?'done':''}" data-subtoggle="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}">${escapeHtml(s.text)}</div>
+              <span class="sub-edit" data-subeditstart="${s.id}">${PENCIL_ICON}</span>
               <div class="sub-del" data-subdel="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}">✕</div>
             </li>`).join('')}
           </ul>` : ''}
@@ -1161,6 +1169,34 @@ function attachEvents(){
     el.addEventListener('keydown', e => { if(e.key==='Enter') addSub(el.getAttribute('data-cat'), el.getAttribute('data-newsub')); if(e.key==='Escape'){ addingSubFor=null; render(); } });
   });
   document.querySelectorAll('[data-confirmsub]').forEach(el => el.onclick = () => addSub(el.getAttribute('data-cat'), el.getAttribute('data-confirmsub')));
+
+  document.querySelectorAll('[data-subeditstart]').forEach(el => el.onclick = () => {
+    editingSubId = el.getAttribute('data-subeditstart');
+    render();
+  });
+  function confirmSubEdit(){
+    const input = document.getElementById('subEditInput');
+    if(!input) return;
+    const catId = input.getAttribute('data-cat');
+    const itemId = input.getAttribute('data-item');
+    const subId = input.getAttribute('data-sub');
+    const text = input.value.trim();
+    const {item} = findGroup(catId, itemId);
+    const s = item && item.subitems.find(s => s.id === subId);
+    if(s && text){ s.text = text; }
+    editingSubId = null;
+    render(); saveData();
+  }
+  document.querySelectorAll('[data-subeditconfirm]').forEach(el => el.onclick = confirmSubEdit);
+  const subEditInput = document.getElementById('subEditInput');
+  if(subEditInput){
+    subEditInput.focus();
+    subEditInput.select();
+    subEditInput.addEventListener('keydown', e => {
+      if(e.key==='Enter') confirmSubEdit();
+      if(e.key==='Escape'){ editingSubId=null; render(); }
+    });
+  }
 
   // links
   document.querySelectorAll('[data-linkdel]').forEach(el => el.onclick = (e) => {

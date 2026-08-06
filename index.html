@@ -74,6 +74,8 @@
     position: relative;
   }
   .info-card-title{ font-family:'Fraunces', serif; font-style:italic; font-size:22px; text-align:left; margin-bottom:12px; }
+  .info-chevron{ font-size:14px; color:var(--ink-soft); transition: transform 0.2s ease; display:inline-block; }
+  .info-chevron.collapsed{ transform: rotate(-90deg); }
   .info-row{ display:flex; gap:8px; font-size:14px; padding:7px 0; border-bottom:1px dashed var(--line); }
   .info-row:last-child{ border-bottom:none; }
   .info-label{ color:var(--ink-soft); min-width:110px; flex-shrink:0; }
@@ -360,6 +362,7 @@ let openItemId = null;
 let addingCategory = false;
 let catEditMode = false;
 let editingInfo = false;
+let infoCollapsed = false;
 let activeTab = 'board';
 let addingSubFor = null;
 let addingLinkFor = null;
@@ -672,8 +675,10 @@ function renderInfoCard(){
   }
 
   let html = `<div class="info-card">
-    <div class="info-card-title">move-in info</div>
-    ${body}
+    <div class="info-card-title" id="infoCollapseToggle" style="cursor:pointer; display:flex; align-items:center; gap:8px;">
+      <span class="info-chevron ${infoCollapsed ? 'collapsed' : ''}">▾</span> move-in info
+    </div>
+    ${infoCollapsed ? '' : body}
     <button class="info-editbtn" id="infoEditBtn" title="edit info">${PENCIL_ICON}</button>
   </div>`;
 
@@ -917,6 +922,8 @@ function attachEvents(){
 
   const infoEditBtn = document.getElementById('infoEditBtn');
   if(infoEditBtn) infoEditBtn.onclick = () => { editingInfo = true; render(); };
+  const infoCollapseToggle = document.getElementById('infoCollapseToggle');
+  if(infoCollapseToggle) infoCollapseToggle.onclick = () => { infoCollapsed = !infoCollapsed; render(); };
   const infoModalOverlay = document.getElementById('infoModalOverlay');
   if(infoModalOverlay) infoModalOverlay.addEventListener('click', (e) => { if(e.target === infoModalOverlay){ editingInfo = false; render(); } });
   const infoCancelBtn = document.getElementById('infoCancelBtn');

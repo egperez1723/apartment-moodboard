@@ -45,6 +45,8 @@
   .title{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size: 40px; color: var(--ink); margin: 4px 0 0 0; }
   .title .heart{ color: var(--terracotta); }
   .subtitle{ font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .title-editbtn{ position:absolute; top:0; right:0; width:28px; height:28px; border-radius:50%; background: var(--paper); border: 1.5px solid var(--line); color:var(--ink-soft); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+  .title-editbtn svg{ width:13px; height:13px; }
 
   .countdown-card{
     background: var(--paper);
@@ -368,6 +370,7 @@ let openItemId = null;
 let addingCategory = false;
 let catEditMode = false;
 let editingInfo = false;
+let editingTitle = false;
 let infoCollapsed = false;
 let activeTab = 'board';
 let addingSubFor = null;
@@ -398,13 +401,26 @@ function compressImage(file, maxDim, cb){
 function render(){
   const app = document.getElementById('app');
   let html = `
-    <header>
+    <header style="position:relative;">
       <div class="eyebrow">the mood board for</div>
-      <div class="title" contenteditable="true" id="titleEdit">${escapeHtml(state.title)}</div>
+      <div class="title">${escapeHtml(state.title)}</div>
       <div class="title-dots">• • •</div>
       <div class="subtitle">everything I'm dreaming up before the big move</div>
+      <button class="title-editbtn" id="titleEditBtn" title="edit title">${PENCIL_ICON}</button>
     </header>
   `;
+  if(editingTitle){
+    html += `<div class="modal-overlay" id="titleModalOverlay">
+      <div class="modal-box">
+        <div class="modal-title">Rename your board</div>
+        <input type="text" id="titleInput" placeholder="e.g. senior yr hq" maxlength="40" value="${escapeHtml(state.title)}" />
+        <div class="modal-actions">
+          <button class="modal-cancel" id="titleCancelBtn">cancel</button>
+          <button class="modal-add" id="titleSaveBtn">save</button>
+        </div>
+      </div>
+    </div>`;
+  }
   html += renderCountdown();
   html += renderInfoCard();
   html += `<div class="tab-bar">
@@ -741,13 +757,22 @@ function attachEvents(){
     render();
   });
 
-  const titleEdit = document.getElementById('titleEdit');
-  if(titleEdit){
-    titleEdit.addEventListener('blur', () => {
-      state.title = titleEdit.innerText.trim() || state.title;
-      saveData();
-    });
-    titleEdit.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); titleEdit.blur(); } });
+  const titleEditBtn = document.getElementById('titleEditBtn');
+  if(titleEditBtn) titleEditBtn.onclick = () => { editingTitle = true; render(); };
+  const titleModalOverlay = document.getElementById('titleModalOverlay');
+  if(titleModalOverlay) titleModalOverlay.addEventListener('click', (e) => { if(e.target === titleModalOverlay){ editingTitle = false; render(); } });
+  const titleCancelBtn = document.getElementById('titleCancelBtn');
+  if(titleCancelBtn) titleCancelBtn.onclick = () => { editingTitle = false; render(); };
+  const titleSaveBtn = document.getElementById('titleSaveBtn');
+  if(titleSaveBtn) titleSaveBtn.onclick = () => {
+    const val = document.getElementById('titleInput').value.trim();
+    if(val) state.title = val;
+    editingTitle = false; render(); saveData();
+  };
+  const titleInput = document.getElementById('titleInput');
+  if(titleInput){
+    titleInput.focus();
+    titleInput.addEventListener('keydown', e => { if(e.key==='Enter') titleSaveBtn.click(); if(e.key==='Escape'){ editingTitle=false; render(); } });
   }
 
   document.querySelectorAll('[data-qtoggle]').forEach(el => el.onclick = () => {

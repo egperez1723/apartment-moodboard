@@ -518,20 +518,21 @@ function render(){
   });
 
   if(openItemId !== null){
-    let openCat = null, openItem = null;
-    for(const c of state.categories){
+    let openCat = null, openItem = null, openCatIndex = -1;
+    state.categories.forEach((c, idx) => {
       const found = (c.items||[]).find(i => i.id === openItemId);
-      if(found){ openCat = c; openItem = found; break; }
-    }
+      if(found){ openCat = c; openItem = found; openCatIndex = idx; }
+    });
     if(openItem){
       const subs = openItem.subitems || [];
       const addingSub = addingSubFor === openItem.id;
       const addingLink = addingLinkFor === openItem.id;
+      const openCColor = catColor(openCatIndex);
       html += `<div class="modal-overlay" id="itemViewOverlay">
         <div class="modal-box modal-box-lg">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div class="card-title" contenteditable="true" data-itemtitle="${openItem.id}" data-cat="${openCat.id}" style="font-size:19px; text-align:left; flex:1;">${escapeHtml(openItem.title)}</div>
-            <span class="item-done-btn" id="itemViewClose" style="margin-left:8px;">${CHECK_ICON}</span>
+            <span class="item-done-btn" id="itemViewClose" style="margin-left:8px; background:${openCColor};">${CHECK_ICON}</span>
           </div>
 
           <div class="modal-section-label">sub-items</div>

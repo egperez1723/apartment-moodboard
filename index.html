@@ -158,7 +158,9 @@
   .cat-edit-row{ display:flex; justify-content:flex-end; margin: -8px 0 12px 0; }
   .cat-edit-toggle{ width:30px; height:30px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; font-family:'Work Sans', sans-serif; font-weight:600; }
   .cat-edit-toggle svg{ width:14px; height:14px; }
-  .cat-del-icon{ width:22px; height:22px; border-radius:50%; background:var(--terracotta); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; margin-left:auto; flex-shrink:0; }
+  .cat-del-icon{ width:22px; height:22px; border-radius:50%; background:var(--terracotta); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; flex-shrink:0; }
+  .cat-edit-actions{ display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .cat-move-btn{ width:22px; height:22px; border-radius:50%; background:var(--paper); border:1.5px solid var(--line); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; flex-shrink:0; }
 
   .cards-grid{ column-count: 2; column-gap: 14px; padding-top: 16px; }
   @media (min-width: 560px){ .cards-grid{ column-count: 3; } }
@@ -489,7 +491,7 @@ function render(){
         <span class="cat-dot" style="background:${cColor};"></span>
         <div class="cat-name hand" contenteditable="true" data-catname="${cat.id}" style="border-bottom-color:${cColor};">${escapeHtml(cat.name)}</div>
         <div class="cat-meta">${items.length} item${items.length===1?'':'s'}</div>
-        ${catEditMode ? `<span class="cat-del-icon" data-catdel="${cat.id}">✕</span>` : ''}
+        ${catEditMode ? `<div class="cat-edit-actions"><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
       </div>
       <div class="cards-grid">`;
 
@@ -1051,6 +1053,16 @@ function attachEvents(){
 
   const catEditToggle = document.getElementById('catEditToggle');
   if(catEditToggle) catEditToggle.onclick = () => { catEditMode = !catEditMode; render(); };
+
+  document.querySelectorAll('[data-catmove]').forEach(el => el.onclick = () => {
+    const catId = el.getAttribute('data-catmove');
+    const dir = el.getAttribute('data-dir');
+    const idx = state.categories.findIndex(c => c.id === catId);
+    const swapWith = dir === 'up' ? idx - 1 : idx + 1;
+    if(idx === -1 || swapWith < 0 || swapWith >= state.categories.length) return;
+    [state.categories[idx], state.categories[swapWith]] = [state.categories[swapWith], state.categories[idx]];
+    render(); saveData();
+  });
 
   document.querySelectorAll('[data-catdel]').forEach(el => el.onclick = () => {
     if(!confirm('Remove this whole category and its items?')) return;

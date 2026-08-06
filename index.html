@@ -257,7 +257,7 @@ let firestoreReady = false;
 
 function defaultState(){
   return {
-    title: "home base",
+    title: "senior yr hq",
     moveInDate: null,
     categories: [],
     bought: [],
@@ -271,7 +271,7 @@ function uid(){ return 'x' + Math.random().toString(36).slice(2,9); }
 function normalizeState(){
   if(!state.categories) state.categories = [];
   if(!state.bought) state.bought = [];
-  if(!state.title) state.title = "home base";
+  if(!state.title) state.title = "senior yr hq";
   if(!state.info) state.info = { unitNumber: '', address: '', storageUnit: '', storageAddress: '' };
   if(!state.quickList) state.quickList = [];
 }

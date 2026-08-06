@@ -400,7 +400,7 @@ function render(){
   html += renderInfoCard();
   html += `<div class="tab-bar">
     <span class="tab-btn ${activeTab==='board'?'active':''}" data-tab="board">mood board</span>
-    <span class="tab-btn ${activeTab==='quick'?'active':''}" data-tab="quick">quick list</span>
+    <span class="tab-btn ${activeTab==='quick'?'active':''}" data-tab="quick">shopping list</span>
   </div>`;
 
   if(activeTab === 'quick'){
@@ -703,7 +703,7 @@ function renderInfoCard(){
 function renderQuickList(){
   const list = state.quickList || [];
   let html = `<div class="quick-section">
-    <div class="quick-title">quick list</div>
+    <div class="quick-title">shopping list</div>
     <div class="quick-subtitle">stuff you realize you need on the go</div>`;
 
   if(list.length > 0){

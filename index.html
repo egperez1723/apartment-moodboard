@@ -108,6 +108,28 @@
   .quick-add-row{ display:flex; align-items:center; gap:8px; margin-top:6px; }
   .quick-add-row input{ flex:1; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); }
 
+  .todo-section{
+    background: var(--paper);
+    border: 2px dashed var(--lavender);
+    border-radius: 18px;
+    padding: 18px 22px;
+    margin: 0 0 34px 0;
+  }
+  .todo-title{ font-family:'Fraunces', serif; font-style:italic; font-size:22px; margin-bottom:2px; }
+  .todo-subtitle{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; }
+  .todo-list{ list-style:none; margin:0 0 10px 0; padding:0; }
+  .todo-item{ display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px dashed var(--line); font-size:14px; }
+  .todo-item:last-child{ border-bottom:none; }
+  .todo-check{ width:19px; height:19px; border-radius:5px; border:1.6px solid #9b7fb0; background:var(--cream); cursor:pointer; flex-shrink:0; position:relative; }
+  .todo-check.done{ background:var(--lavender); border-color:#9b7fb0; }
+  .todo-check.done::after{ content:""; position:absolute; left:5px; top:1px; width:5px; height:10px; border:solid #4a3f31; border-width:0 2px 2px 0; transform:rotate(40deg); }
+  .todo-text{ flex:1; cursor:pointer; }
+  .todo-text.done{ text-decoration:line-through; color:var(--ink-soft); }
+  .todo-del{ font-size:13px; color:var(--line); cursor:pointer; }
+  .todo-del:hover{ color:var(--terracotta); }
+  .todo-add-row{ display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .todo-add-row input{ flex:1; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); }
+
   .tab-bar{ display:flex; gap:8px; margin-bottom:24px; }
   .tab-btn{ flex:1; text-align:center; font-family:'Work Sans', sans-serif; font-weight:600; font-size:13px; padding:10px; border-radius:14px; border:2px solid var(--line); background:var(--paper); color:var(--ink-soft); cursor:pointer; }
   .tab-btn.active{ background:var(--terracotta); border-color:var(--terracotta); color:white; }
@@ -263,7 +285,8 @@ function defaultState(){
     categories: [],
     bought: [],
     info: { unitNumber: '', address: '', storageUnit: '', storageAddress: '' },
-    quickList: []
+    quickList: [],
+    todoList: []
   };
 }
 
@@ -275,6 +298,7 @@ function normalizeState(){
   if(!state.title) state.title = "senior yr hq";
   if(!state.info) state.info = { unitNumber: '', address: '', storageUnit: '', storageAddress: '' };
   if(!state.quickList) state.quickList = [];
+  if(!state.todoList) state.todoList = [];
 }
 
 async function loadData(){
@@ -411,10 +435,11 @@ function render(){
   html += `<div class="tab-bar">
     <span class="tab-btn ${activeTab==='board'?'active':''}" data-tab="board">mood board</span>
     <span class="tab-btn ${activeTab==='quick'?'active':''}" data-tab="quick">shopping list</span>
+    <span class="tab-btn ${activeTab==='todo'?'active':''}" data-tab="todo">stuff to do</span>
   </div>`;
 
-  if(activeTab === 'quick'){
-    html += renderQuickList();
+  if(activeTab === 'quick' || activeTab === 'todo'){
+    html += activeTab === 'quick' ? renderQuickList() : renderTodoList();
     html += `<footer>
       <div class="backup-row">
         <span class="backup-link" id="backupLink">backup board</span>
@@ -737,6 +762,30 @@ function renderQuickList(){
   return html;
 }
 
+function renderTodoList(){
+  const list = state.todoList || [];
+  let html = `<div class="todo-section">
+    <div class="todo-title">stuff to do</div>
+    <div class="todo-subtitle">logistics and tasks, not things to buy</div>`;
+
+  if(list.length > 0){
+    html += `<ul class="todo-list">
+      ${list.map(t => `<li class="todo-item">
+        <div class="todo-check ${t.done?'done':''}" data-ttoggle="${t.id}"></div>
+        <div class="todo-text ${t.done?'done':''}" data-ttoggle="${t.id}">${escapeHtml(t.text)}</div>
+        <span class="todo-del" data-tdel="${t.id}">✕</span>
+      </li>`).join('')}
+    </ul>`;
+  }
+
+  html += `<div class="todo-add-row">
+    <input type="text" id="todoAddInput" placeholder="e.g. set up renters insurance…" maxlength="80" />
+    <span class="round-plus" id="todoAddBtn">+</span>
+  </div></div>`;
+
+  return html;
+}
+
 function attachEvents(){
   document.querySelectorAll('[data-tab]').forEach(el => el.onclick = () => {
     activeTab = el.getAttribute('data-tab');
@@ -764,6 +813,28 @@ function attachEvents(){
   if(quickAddBtn) quickAddBtn.onclick = addQuickItem;
   const quickAddInput = document.getElementById('quickAddInput');
   if(quickAddInput) quickAddInput.addEventListener('keydown', e => { if(e.key==='Enter') addQuickItem(); });
+
+  document.querySelectorAll('[data-ttoggle]').forEach(el => el.onclick = () => {
+    const t = state.todoList.find(x => x.id === el.getAttribute('data-ttoggle'));
+    if(t){ t.done = !t.done; render(); saveData(); }
+  });
+  document.querySelectorAll('[data-tdel]').forEach(el => el.onclick = () => {
+    state.todoList = state.todoList.filter(x => x.id !== el.getAttribute('data-tdel'));
+    render(); saveData();
+  });
+  function addTodoItem(){
+    const input = document.getElementById('todoAddInput');
+    const text = input.value.trim();
+    if(!text) return;
+    state.todoList.push({id: uid(), text, done:false});
+    render(); saveData();
+    const newInput = document.getElementById('todoAddInput');
+    if(newInput) newInput.focus();
+  }
+  const todoAddBtn = document.getElementById('todoAddBtn');
+  if(todoAddBtn) todoAddBtn.onclick = addTodoItem;
+  const todoAddInput = document.getElementById('todoAddInput');
+  if(todoAddInput) todoAddInput.addEventListener('keydown', e => { if(e.key==='Enter') addTodoItem(); });
 
   const addCatBtn = document.getElementById('addCatBtn');
   if(addCatBtn) addCatBtn.onclick = () => { addingCategory = true; render(); const inp = document.getElementById('newCatInput'); if(inp) inp.focus(); };

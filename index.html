@@ -850,14 +850,37 @@ function attachEvents(){
     state.quickList = state.quickList.filter(x => x.id !== el.getAttribute('data-qdel'));
     render(); saveData();
   });
+  function wireQuickItem(li, item){
+    li.querySelector('[data-qtoggle].quick-check').onclick = () => { item.done = !item.done; render(); saveData(); };
+    li.querySelector('.quick-text').onclick = () => { item.done = !item.done; render(); saveData(); };
+    li.querySelector('.quick-del').onclick = () => {
+      state.quickList = state.quickList.filter(x => x.id !== item.id);
+      render(); saveData();
+    };
+  }
   function addQuickItem(){
     const input = document.getElementById('quickAddInput');
     const text = input.value.trim();
     if(!text) return;
-    state.quickList.push({id: uid(), text, done:false});
-    render(); saveData();
-    const newInput = document.getElementById('quickAddInput');
-    if(newInput) newInput.focus();
+    const item = {id: uid(), text, done:false};
+    state.quickList.push(item);
+    saveData();
+
+    let list = document.querySelector('.quick-list');
+    if(!list){
+      const section = document.querySelector('.quick-section');
+      list = document.createElement('ul');
+      list.className = 'quick-list';
+      section.insertBefore(list, section.querySelector('.quick-add-row'));
+    }
+    const li = document.createElement('li');
+    li.className = 'quick-item';
+    li.innerHTML = `<div class="quick-check" data-qtoggle="${item.id}"></div><div class="quick-text" data-qtoggle="${item.id}">${escapeHtml(text)}</div><span class="quick-del" data-qdel="${item.id}">✕</span>`;
+    list.appendChild(li);
+    wireQuickItem(li, item);
+
+    input.value = '';
+    input.focus();
   }
   const quickAddBtn = document.getElementById('quickAddBtn');
   if(quickAddBtn) quickAddBtn.onclick = addQuickItem;

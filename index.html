@@ -247,12 +247,19 @@
   .add-card{ border: 2px dashed var(--line); border-radius: 14px; padding: 14px; background: transparent; box-shadow:none; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-soft); font-size:13px; min-height:120px; }
   .add-card:hover{ border-color: var(--sage-dark); color:var(--sage-dark); }
 
-  .bought-section{ margin-top: 40px; border-top: 2px dashed var(--line); padding-top: 20px; }
-  .bought-title{ font-family:'Fraunces', serif; font-style:italic; font-size: 22px; color: var(--ink-soft); margin-bottom: 10px; }
-  .bought-list{ display:flex; flex-wrap:wrap; gap:8px; }
-  .bought-chip{ background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 6px 12px; font-size: 12px; color: var(--ink-soft); display:flex; align-items:center; gap:6px; }
-  .bought-chip .chip-del{ cursor:pointer; color: var(--ink-soft); }
-  .bought-chip .chip-del:hover{ color: var(--terracotta); }
+  .completed-overlay{ position:absolute; inset:0; opacity:0.28; border-radius:14px; pointer-events:none; }
+  .completed-badge{ position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .completed-badge svg{ width:11px; height:11px; }
+  .card.completed .card-title-static{ text-decoration:line-through; opacity:0.7; }
+
+  .cat-mood-toggle{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:6px; }
+  .cat-mood-toggle svg{ width:12px; height:12px; }
+  .cat-mood-toggle.active{ background:var(--terracotta); border-color:var(--terracotta); color:white; }
+  .mood-photo-grid{ column-count:2; column-gap:10px; }
+  @media (min-width: 560px){ .mood-photo-grid{ column-count:3; } }
+  .mood-photo{ break-inside:avoid; margin-bottom:10px; border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+  .mood-photo img{ width:100%; display:block; }
+  .mood-empty{ text-align:center; font-size:13px; color:var(--ink-soft); font-style:italic; padding:20px; }
 
   .empty-hint{ text-align:center; color: var(--ink-soft); padding: 30px 16px; font-family:'Fraunces', serif; font-style:italic; font-size:19px; }
   footer{ text-align:center; font-size: 11px; color: var(--ink-soft); margin-top: 40px; }
@@ -306,6 +313,17 @@ function normalizeState(){
   if(!state.quickList) state.quickList = [];
   if(!state.todoList) state.todoList = [];
   if(state.infoCollapsed === undefined) state.infoCollapsed = false;
+  if(state.bought.length > 0){
+    let restoreCat = state.categories.find(c => c.name === 'previously completed');
+    if(!restoreCat){
+      restoreCat = {id: uid(), name: 'previously completed', items: []};
+      state.categories.push(restoreCat);
+    }
+    state.bought.forEach(b => {
+      restoreCat.items.push({id: b.id || uid(), title: b.title || 'item', notes:'', images:[], links:[], subitems:[], completed:true});
+    });
+    state.bought = [];
+  }
 }
 
 async function loadData(){
@@ -363,6 +381,7 @@ const EXPAND_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 const COLLAPSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>`;
 const CHECK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg>`;
 const COPY_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
+const IMAGE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
 const NOTE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>`;
 
 const DOODLE_COLORS = ['var(--terracotta)','var(--sage-dark)','#c9a86a','#a9c4c9'];
@@ -399,6 +418,7 @@ let editingDate = false;
 let openItemId = null;
 let addingCategory = false;
 let catEditMode = false;
+let moodViewCats = new Set();
 let editingInfo = false;
 let activeTab = 'board';
 let addingSubFor = null;
@@ -490,21 +510,37 @@ function render(){
   state.categories.forEach((cat, catIndex) => {
     const items = cat.items || [];
     const cColor = catColor(catIndex);
+    const inMoodView = moodViewCats.has(cat.id);
+    const allImages = items.flatMap(it => (it.images||[]).map(img => ({img, title: it.title})));
     html += `<div class="board-cat">
       <div class="cat-header">
         <span class="cat-dot" style="background:${cColor};"></span>
         <div class="cat-name hand" contenteditable="true" data-catname="${cat.id}" style="border-bottom-color:${cColor};">${escapeHtml(cat.name)}</div>
         <div class="cat-meta">${items.length} item${items.length===1?'':'s'}</div>
+        <span class="cat-mood-toggle ${inMoodView?'active':''}" data-moodview="${cat.id}" title="mood board view">${IMAGE_ICON}</span>
         ${catEditMode ? `<div class="cat-edit-actions"><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
-      </div>
-      <div class="cards-grid">`;
+      </div>`;
 
-    items.forEach(it => {
+    if(inMoodView){
+      if(allImages.length === 0){
+        html += `<div class="mood-empty">no photos pinned in this category yet</div>`;
+      } else {
+        html += `<div class="mood-photo-grid">${allImages.map(({img,title}) => `<div class="mood-photo"><img src="${img.data}" alt="${escapeHtml(title)}" /></div>`).join('')}</div>`;
+      }
+      html += `</div>`;
+      return;
+    }
+
+    html += `<div class="cards-grid">`;
+
+    const sortedItems = [...items].sort((a,b) => (a.completed?1:0) - (b.completed?1:0));
+    sortedItems.forEach(it => {
       const subs = it.subitems || [];
       const doneCount = subs.filter(s=>s.done).length;
-      html += `<div class="card" data-cardopen="${it.id}" draggable="true" data-dragitem="${it.id}" data-dragcat="${cat.id}">
+      html += `<div class="card ${it.completed?'completed':''}" data-cardopen="${it.id}" draggable="true" data-dragitem="${it.id}" data-dragcat="${cat.id}">
         <div class="washi" style="background:${cColor};"></div>
         ${(it.images.length + it.links.length) > 3 ? `<div class="washi2" style="background:${catColor(catIndex+1)};"></div>` : ''}
+        ${it.completed ? `<div class="completed-overlay" style="background:${cColor};"></div><div class="completed-badge" style="background:${cColor};">${CHECK_ICON}</div>` : ''}
         <div class="card-top">
           <div class="card-title-static">${escapeHtml(it.title)}</div>
           ${it.notes ? `<span class="note-indicator" title="has a note">${NOTE_ICON}</span>` : ''}
@@ -525,7 +561,7 @@ function render(){
         </div>` : ''}
 
         <div class="card-footer">
-          <button class="move-bought-btn" data-tobought="${it.id}" data-cat="${cat.id}">completed</button>
+          <button class="move-bought-btn" data-togglecompleted="${it.id}" data-cat="${cat.id}">${it.completed ? 'mark active' : 'completed'}</button>
           <span class="expand-btn" data-expandtoggle="${it.id}">${EXPAND_ICON}</span>
         </div>
       </div>`;
@@ -596,14 +632,6 @@ function render(){
         </div>
       </div>`;
     }
-  }
-
-  if(state.bought.length > 0){
-    html += `<div class="bought-section"><div class="bought-title">completed</div><div class="bought-list">`;
-    state.bought.forEach(b => {
-      html += `<div class="bought-chip">${escapeHtml(b.title)} <span class="chip-del" data-boughtdel="${b.id}">✕</span></div>`;
-    });
-    html += `</div></div>`;
   }
 
   html += `<footer>
@@ -1187,20 +1215,17 @@ function attachEvents(){
     if(cat){ cat.items = cat.items.filter(i => i.id !== el.getAttribute('data-carddel')); render(); saveData(); }
   });
 
-  document.querySelectorAll('[data-tobought]').forEach(el => el.onclick = () => {
+  document.querySelectorAll('[data-togglecompleted]').forEach(el => el.onclick = () => {
     const catId = el.getAttribute('data-cat');
     const cat = state.categories.find(c => c.id === catId);
-    const idx = cat ? cat.items.findIndex(i => i.id === el.getAttribute('data-tobought')) : -1;
-    if(idx !== -1){
-      const [it] = cat.items.splice(idx,1);
-      state.bought.push({id: it.id, title: it.title});
-      render(); saveData();
-    }
+    const item = cat ? cat.items.find(i => i.id === el.getAttribute('data-togglecompleted')) : null;
+    if(item){ item.completed = !item.completed; render(); saveData(); }
   });
 
-  document.querySelectorAll('[data-boughtdel]').forEach(el => el.onclick = () => {
-    state.bought = state.bought.filter(b => b.id !== el.getAttribute('data-boughtdel'));
-    render(); saveData();
+  document.querySelectorAll('[data-moodview]').forEach(el => el.onclick = () => {
+    const catId = el.getAttribute('data-moodview');
+    if(moodViewCats.has(catId)) moodViewCats.delete(catId); else moodViewCats.add(catId);
+    render();
   });
 
   // subitems

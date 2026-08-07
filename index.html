@@ -145,8 +145,8 @@
   .quick-del{ font-size:13px; color:var(--line); cursor:pointer; }
   .quick-del:hover{ color:var(--terracotta); }
   .quick-add-row{ display:flex; align-items:center; gap:8px; margin-top:6px; }
-  .quick-add-row input{ flex:1; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); }
-  .quick-price-input{ flex:0 0 62px !important; }
+  .quick-add-row input{ flex:1; min-width:0; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); box-sizing:border-box; }
+  .quick-price-input{ flex:0 0 60px !important; min-width:0 !important; box-sizing:border-box; }
   .quick-price{ color:var(--sage-dark); font-weight:600; font-size:12.5px; }
   .budget-summary{ display:flex; gap:10px; margin:-2px 0 12px 0; }
   .budget-stat{ flex:1; background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:8px 10px; text-align:center; }
@@ -953,7 +953,11 @@ function attachEvents(){
 
   document.querySelectorAll('[data-qtoggle]').forEach(el => el.onclick = () => {
     const q = state.quickList.find(x => x.id === el.getAttribute('data-qtoggle'));
-    if(q){ q.done = !q.done; render(); saveData(); }
+    if(q){
+      q.done = !q.done;
+      if(q.done && !q.price){ editingQuickId = q.id; }
+      render(); saveData();
+    }
   });
   document.querySelectorAll('[data-qdel]').forEach(el => el.onclick = () => {
     state.quickList = state.quickList.filter(x => x.id !== el.getAttribute('data-qdel'));
@@ -995,7 +999,11 @@ function attachEvents(){
     return `<div class="quick-check ${item.done?'done':''}" data-qtoggle="${item.id}"></div><div class="quick-text ${item.done?'done':''}" data-quickeditstart="${item.id}">${escapeHtml(item.text)}${item.price ? ` <span class="quick-price">$${Number(item.price).toFixed(2)}</span>` : ''}</div><span class="quick-del" data-qdel="${item.id}">✕</span>`;
   }
   function wireQuickItem(li, item){
-    li.querySelector('[data-qtoggle].quick-check').onclick = () => { item.done = !item.done; render(); saveData(); };
+    li.querySelector('[data-qtoggle].quick-check').onclick = () => {
+      item.done = !item.done;
+      if(item.done && !item.price){ editingQuickId = item.id; }
+      render(); saveData();
+    };
     li.querySelector('[data-quickeditstart]').onclick = () => { editingQuickId = item.id; render(); };
     li.querySelector('.quick-del').onclick = () => {
       state.quickList = state.quickList.filter(x => x.id !== item.id);

@@ -338,6 +338,11 @@ async function loadData(){
   // live sync from Firestore — this is the source of truth once it connects
   boardRef.onSnapshot((doc) => {
     firestoreReady = true;
+    if(doc.metadata.hasPendingWrites){
+      // this is our own local write already reflected on screen — skip re-render so it doesn't steal focus
+      isFirstSnapshot = false;
+      return;
+    }
     if(doc.exists){
       state = doc.data().state ? JSON.parse(doc.data().state) : defaultState();
     } else if(isFirstSnapshot){

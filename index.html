@@ -71,6 +71,7 @@
   .quick-access-row{ display:flex; gap:10px; margin-bottom:24px; }
   .quick-access-btn{ display:flex; align-items:center; gap:7px; font-family:'Work Sans', sans-serif; font-weight:600; font-size:12px; letter-spacing:0.5px; color:var(--terracotta); background:rgba(217,138,99,0.12); padding:9px 16px; border-radius:20px; cursor:pointer; }
   .quick-access-btn svg{ width:14px; height:14px; flex-shrink:0; }
+  .modal-closerow{ display:flex; justify-content:flex-end; margin-bottom:8px; }
 
   .index-card{ background:var(--paper); border-radius:4px; box-shadow:0 4px 14px rgba(74,63,49,0.18); overflow:hidden; }
   .index-card-band{ background:var(--terracotta); color:#fffdf8; font-family:'Work Sans', sans-serif; font-weight:700; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
@@ -549,6 +550,7 @@ function render(){
   if(addingCategory){
     html += `<div class="modal-overlay" id="catModalOverlay">
       <div class="modal-box">
+        <div class="modal-closerow"><span class="expand-btn" id="catCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">New category</div>
         <input type="text" id="newCatInput" placeholder="e.g. Bedroom" maxlength="30" />
         <div class="modal-actions">
@@ -709,6 +711,7 @@ function render(){
     const cat = state.categories.find(c => c.id === addingItemCat);
     html += `<div class="modal-overlay" id="itemModalOverlay">
       <div class="modal-box modal-box-lg">
+        <div class="modal-closerow"><span class="expand-btn" id="itemCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">New item${cat ? ` in ${escapeHtml(cat.name)}` : ''}</div>
         <input type="text" id="itemTitleInput" placeholder="e.g. Bedding" maxlength="40" value="${escapeHtml(itemDraft.title)}" />
         <input type="text" inputmode="decimal" id="itemPriceInput" placeholder="price (optional) — e.g. 24.99" maxlength="10" value="${escapeHtml(itemDraft.price || '')}" />
@@ -813,6 +816,7 @@ function renderInfoCard(){
 
     html += `<div class="modal-overlay" id="infoViewOverlay">
       <div class="modal-box" style="padding:0; max-width:300px; background:transparent; box-shadow:none;">
+        <div class="modal-closerow"><span class="expand-btn" id="infoViewCloseBtn" style="background:var(--paper);">${COLLAPSE_ICON}</span></div>
         <div class="index-card">
           <div class="index-card-band">
             <span>move-in info</span>
@@ -829,6 +833,7 @@ function renderInfoCard(){
   if(editingInfo){
     html += `<div class="modal-overlay" id="infoModalOverlay">
       <div class="modal-box modal-box-lg info-modal">
+        <div class="modal-closerow"><span class="expand-btn" id="infoEditCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">move-in info</div>
         <div class="info-field-label">unit number</div>
         <input type="text" id="infoUnitInput" placeholder="e.g. Apt 204" value="${escapeHtml(info.unitNumber || '')}" />
@@ -869,9 +874,7 @@ function renderBudgetModal(){
 
   return `<div class="modal-overlay" id="budgetModalOverlay">
     <div class="modal-box" style="max-width:340px; padding:0; background:transparent; box-shadow:none;">
-      <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-        <span class="expand-btn" id="budgetCloseBtn" style="background:var(--paper);">${COLLAPSE_ICON}</span>
-      </div>
+      <div class="modal-closerow"><span class="expand-btn" id="budgetCloseBtn" style="background:var(--paper);">${COLLAPSE_ICON}</span></div>
       <div class="receipt">
         ${receiptItems.map(r => `<div class="receipt-row ${r.done?'done':''}"><span class="receipt-item">${escapeHtml(r.name)}</span><span class="receipt-dots"></span><span class="receipt-price">$${r.price.toFixed(2)}</span></div>`).join('')}
         <div class="receipt-divider"></div>
@@ -914,7 +917,6 @@ function renderQuickList(){
 
   html += `<div class="quick-add-row">
     <input type="text" id="quickAddInput" placeholder="e.g. more hangers…" maxlength="60" />
-    <input type="text" inputmode="decimal" id="quickAddPrice" class="quick-price-input" placeholder="$" maxlength="10" />
     <span class="round-plus" id="quickAddBtn">+</span>
   </div></div>`;
 
@@ -984,16 +986,22 @@ function attachEvents(){
   }
   document.querySelectorAll('[data-quickeditconfirm]').forEach(el => el.onclick = confirmQuickEdit);
   const quickEditText = document.getElementById('quickEditText');
+  const quickEditPrice = document.getElementById('quickEditPrice');
   if(quickEditText){
-    quickEditText.focus();
-    quickEditText.select();
+    const editingItem = state.quickList.find(x => x.id === editingQuickId);
+    if(editingItem && editingItem.done && !editingItem.price && quickEditPrice){
+      quickEditPrice.focus();
+      quickEditPrice.select();
+    } else {
+      quickEditText.focus();
+      quickEditText.select();
+    }
     quickEditText.addEventListener('keydown', e => {
       if(e.key==='Enter') confirmQuickEdit();
       if(e.key==='Escape'){ editingQuickId=null; render(); }
     });
   }
-  const quickEditPrice = document.getElementById('quickEditPrice');
-  if(quickEditPrice) quickEditPrice.addEventListener('keydown', e => { if(e.key==='Enter') confirmQuickEdit(); });
+  if(quickEditPrice) quickEditPrice.addEventListener('keydown', e => { if(e.key==='Enter') confirmQuickEdit(); if(e.key==='Escape'){ editingQuickId=null; render(); } });
 
   function quickItemHtml(item){
     return `<div class="quick-check ${item.done?'done':''}" data-qtoggle="${item.id}"></div><div class="quick-text ${item.done?'done':''}" data-quickeditstart="${item.id}">${escapeHtml(item.text)}${item.price ? ` <span class="quick-price">$${Number(item.price).toFixed(2)}</span>` : ''}</div><span class="quick-del" data-qdel="${item.id}">✕</span>`;
@@ -1031,11 +1039,9 @@ function attachEvents(){
   }
   function addQuickItem(){
     const input = document.getElementById('quickAddInput');
-    const priceInput = document.getElementById('quickAddPrice');
     const text = input.value.trim();
     if(!text) return;
-    const priceVal = priceInput ? priceInput.value.trim() : '';
-    const item = {id: uid(), text, done:false, price: priceVal ? (parseFloat(priceVal) || 0) : 0};
+    const item = {id: uid(), text, done:false, price: 0};
     state.quickList.push(item);
     saveData();
 
@@ -1054,15 +1060,12 @@ function attachEvents(){
     updateQuickBudgetSummary();
 
     input.value = '';
-    if(priceInput) priceInput.value = '';
     input.focus();
   }
   const quickAddBtn = document.getElementById('quickAddBtn');
   if(quickAddBtn) quickAddBtn.onclick = addQuickItem;
   const quickAddInput = document.getElementById('quickAddInput');
   if(quickAddInput) quickAddInput.addEventListener('keydown', e => { if(e.key==='Enter') addQuickItem(); });
-  const quickAddPrice = document.getElementById('quickAddPrice');
-  if(quickAddPrice) quickAddPrice.addEventListener('keydown', e => { if(e.key==='Enter') addQuickItem(); });
 
   document.querySelectorAll('[data-ttoggle]').forEach(el => el.onclick = () => {
     const t = state.todoList.find(x => x.id === el.getAttribute('data-ttoggle'));
@@ -1115,6 +1118,8 @@ function attachEvents(){
   if(catModalOverlay) catModalOverlay.addEventListener('click', (e) => { if(e.target === catModalOverlay){ addingCategory = false; render(); } });
   const catCancelBtn = document.getElementById('catCancelBtn');
   if(catCancelBtn) catCancelBtn.onclick = () => { addingCategory = false; render(); };
+  const catCloseBtn = document.getElementById('catCloseBtn');
+  if(catCloseBtn) catCloseBtn.onclick = () => { addingCategory = false; render(); };
   const catAddBtn = document.getElementById('catAddBtn');
   if(catAddBtn) catAddBtn.onclick = addCategory;
   const newCatInput = document.getElementById('newCatInput');
@@ -1136,6 +1141,8 @@ function attachEvents(){
   if(itemModalOverlay) itemModalOverlay.addEventListener('click', (e) => { if(e.target === itemModalOverlay){ addingItemCat = null; itemDraft = null; render(); } });
   const itemCancelBtn = document.getElementById('itemCancelBtn');
   if(itemCancelBtn) itemCancelBtn.onclick = () => { addingItemCat = null; itemDraft = null; render(); };
+  const itemCloseBtn = document.getElementById('itemCloseBtn');
+  if(itemCloseBtn) itemCloseBtn.onclick = () => { addingItemCat = null; itemDraft = null; render(); };
   const itemSaveBtn = document.getElementById('itemSaveBtn');
   if(itemSaveBtn) itemSaveBtn.onclick = () => {
     syncItemDraftFromInputs();
@@ -1326,6 +1333,8 @@ function attachEvents(){
   if(infoModalOverlay) infoModalOverlay.addEventListener('click', (e) => { if(e.target === infoModalOverlay){ editingInfo = false; viewingInfo = true; render(); } });
   const infoCancelBtn = document.getElementById('infoCancelBtn');
   if(infoCancelBtn) infoCancelBtn.onclick = () => { editingInfo = false; viewingInfo = true; render(); };
+  const infoEditCloseBtn = document.getElementById('infoEditCloseBtn');
+  if(infoEditCloseBtn) infoEditCloseBtn.onclick = () => { editingInfo = false; viewingInfo = true; render(); };
   const infoSaveBtn = document.getElementById('infoSaveBtn');
   if(infoSaveBtn) infoSaveBtn.onclick = () => {
     state.info = {
@@ -1340,6 +1349,8 @@ function attachEvents(){
 
   const infoViewOverlay = document.getElementById('infoViewOverlay');
   if(infoViewOverlay) infoViewOverlay.addEventListener('click', (e) => { if(e.target === infoViewOverlay){ viewingInfo = false; render(); } });
+  const infoViewCloseBtn = document.getElementById('infoViewCloseBtn');
+  if(infoViewCloseBtn) infoViewCloseBtn.onclick = () => { viewingInfo = false; render(); };
   const infoEditFromViewBtn = document.getElementById('infoEditFromViewBtn');
   if(infoEditFromViewBtn) infoEditFromViewBtn.onclick = () => { viewingInfo = false; editingInfo = true; render(); };
 

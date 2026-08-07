@@ -108,6 +108,16 @@
   .quick-del:hover{ color:var(--terracotta); }
   .quick-add-row{ display:flex; align-items:center; gap:8px; margin-top:6px; }
   .quick-add-row input{ flex:1; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); }
+  .quick-price-input{ flex:0 0 62px !important; }
+  .quick-price{ color:var(--sage-dark); font-weight:600; font-size:12.5px; }
+  .budget-summary{ display:flex; gap:10px; margin:-2px 0 12px 0; }
+  .budget-stat{ flex:1; background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:8px 10px; text-align:center; }
+  .budget-label{ display:block; font-size:9.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px; }
+  .budget-amt{ display:block; font-size:16px; font-weight:600; color:var(--ink); }
+  .budget-amt.spent{ color:var(--sage-dark); }
+  .quick-item-edit{ gap:6px; }
+  .quick-edit-input{ flex:1; font-family:'Work Sans', sans-serif; font-size:13px; padding:5px 8px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); }
+  .quick-edit-price{ flex:0 0 54px; font-family:'Work Sans', sans-serif; font-size:13px; padding:5px 6px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); }
 
   .todo-section{
     background: var(--paper);
@@ -424,6 +434,7 @@ let openItemId = null;
 let addingCategory = false;
 let catEditMode = false;
 let moodViewCats = new Set();
+let editingQuickId = null;
 let editingInfo = false;
 let activeTab = 'board';
 let addingSubFor = null;
@@ -795,15 +806,29 @@ function renderInfoCard(){
 
 function renderQuickList(){
   const list = state.quickList || [];
+  const totalAll = list.reduce((sum, q) => sum + (Number(q.price) || 0), 0);
+  const totalSpent = list.filter(q => q.done).reduce((sum, q) => sum + (Number(q.price) || 0), 0);
+
   let html = `<div class="quick-section">
     <div class="quick-title">shopping list</div>
     <div class="quick-subtitle">stuff you realize you need on the go</div>`;
 
+  if(totalAll > 0){
+    html += `<div class="budget-summary">
+      <div class="budget-stat"><span class="budget-label">planned</span><span class="budget-amt">$${totalAll.toFixed(2)}</span></div>
+      <div class="budget-stat"><span class="budget-label">spent</span><span class="budget-amt spent">$${totalSpent.toFixed(2)}</span></div>
+    </div>`;
+  }
+
   if(list.length > 0){
     html += `<ul class="quick-list">
-      ${list.map(q => `<li class="quick-item">
+      ${list.map(q => editingQuickId === q.id ? `<li class="quick-item quick-item-edit">
+        <input type="text" id="quickEditText" class="quick-edit-input" value="${escapeHtml(q.text)}" maxlength="60" data-id="${q.id}" />
+        <input type="text" inputmode="decimal" id="quickEditPrice" class="quick-edit-price" placeholder="$" value="${q.price ? q.price : ''}" />
+        <span class="mini-plus" data-quickeditconfirm="${q.id}">${CHECK_ICON}</span>
+      </li>` : `<li class="quick-item">
         <div class="quick-check ${q.done?'done':''}" data-qtoggle="${q.id}"></div>
-        <div class="quick-text ${q.done?'done':''}" data-qtoggle="${q.id}">${escapeHtml(q.text)}</div>
+        <div class="quick-text ${q.done?'done':''}" data-quickeditstart="${q.id}">${escapeHtml(q.text)}${q.price ? ` <span class="quick-price">$${Number(q.price).toFixed(2)}</span>` : ''}</div>
         <span class="quick-del" data-qdel="${q.id}">✕</span>
       </li>`).join('')}
     </ul>`;
@@ -811,6 +836,7 @@ function renderQuickList(){
 
   html += `<div class="quick-add-row">
     <input type="text" id="quickAddInput" placeholder="e.g. more hangers…" maxlength="60" />
+    <input type="text" inputmode="decimal" id="quickAddPrice" class="quick-price-input" placeholder="$" maxlength="10" />
     <span class="round-plus" id="quickAddBtn">+</span>
   </div></div>`;
 
@@ -855,19 +881,75 @@ function attachEvents(){
     state.quickList = state.quickList.filter(x => x.id !== el.getAttribute('data-qdel'));
     render(); saveData();
   });
+  document.querySelectorAll('[data-quickeditstart]').forEach(el => el.onclick = () => {
+    editingQuickId = el.getAttribute('data-quickeditstart');
+    render();
+  });
+  function confirmQuickEdit(){
+    const textInput = document.getElementById('quickEditText');
+    const priceInput = document.getElementById('quickEditPrice');
+    if(!textInput) return;
+    const id = textInput.getAttribute('data-id');
+    const q = state.quickList.find(x => x.id === id);
+    const text = textInput.value.trim();
+    if(q && text){
+      q.text = text;
+      const priceVal = priceInput.value.trim();
+      q.price = priceVal ? parseFloat(priceVal) || 0 : 0;
+    }
+    editingQuickId = null;
+    render(); saveData();
+  }
+  document.querySelectorAll('[data-quickeditconfirm]').forEach(el => el.onclick = confirmQuickEdit);
+  const quickEditText = document.getElementById('quickEditText');
+  if(quickEditText){
+    quickEditText.focus();
+    quickEditText.select();
+    quickEditText.addEventListener('keydown', e => {
+      if(e.key==='Enter') confirmQuickEdit();
+      if(e.key==='Escape'){ editingQuickId=null; render(); }
+    });
+  }
+  const quickEditPrice = document.getElementById('quickEditPrice');
+  if(quickEditPrice) quickEditPrice.addEventListener('keydown', e => { if(e.key==='Enter') confirmQuickEdit(); });
+
+  function quickItemHtml(item){
+    return `<div class="quick-check ${item.done?'done':''}" data-qtoggle="${item.id}"></div><div class="quick-text ${item.done?'done':''}" data-quickeditstart="${item.id}">${escapeHtml(item.text)}${item.price ? ` <span class="quick-price">$${Number(item.price).toFixed(2)}</span>` : ''}</div><span class="quick-del" data-qdel="${item.id}">✕</span>`;
+  }
   function wireQuickItem(li, item){
     li.querySelector('[data-qtoggle].quick-check').onclick = () => { item.done = !item.done; render(); saveData(); };
-    li.querySelector('.quick-text').onclick = () => { item.done = !item.done; render(); saveData(); };
+    li.querySelector('[data-quickeditstart]').onclick = () => { editingQuickId = item.id; render(); };
     li.querySelector('.quick-del').onclick = () => {
       state.quickList = state.quickList.filter(x => x.id !== item.id);
       render(); saveData();
     };
   }
+  function updateQuickBudgetSummary(){
+    const list = state.quickList || [];
+    const totalAll = list.reduce((sum,q)=>sum+(Number(q.price)||0),0);
+    const totalSpent = list.filter(q=>q.done).reduce((sum,q)=>sum+(Number(q.price)||0),0);
+    const section = document.querySelector('.quick-section');
+    if(!section) return;
+    let summary = section.querySelector('.budget-summary');
+    if(totalAll > 0){
+      if(!summary){
+        summary = document.createElement('div');
+        summary.className = 'budget-summary';
+        const subtitle = section.querySelector('.quick-subtitle');
+        if(subtitle) subtitle.insertAdjacentElement('afterend', summary);
+      }
+      summary.innerHTML = `<div class="budget-stat"><span class="budget-label">planned</span><span class="budget-amt">$${totalAll.toFixed(2)}</span></div><div class="budget-stat"><span class="budget-label">spent</span><span class="budget-amt spent">$${totalSpent.toFixed(2)}</span></div>`;
+    } else if(summary){
+      summary.remove();
+    }
+  }
   function addQuickItem(){
     const input = document.getElementById('quickAddInput');
+    const priceInput = document.getElementById('quickAddPrice');
     const text = input.value.trim();
     if(!text) return;
-    const item = {id: uid(), text, done:false};
+    const priceVal = priceInput ? priceInput.value.trim() : '';
+    const item = {id: uid(), text, done:false, price: priceVal ? (parseFloat(priceVal) || 0) : 0};
     state.quickList.push(item);
     saveData();
 
@@ -880,17 +962,21 @@ function attachEvents(){
     }
     const li = document.createElement('li');
     li.className = 'quick-item';
-    li.innerHTML = `<div class="quick-check" data-qtoggle="${item.id}"></div><div class="quick-text" data-qtoggle="${item.id}">${escapeHtml(text)}</div><span class="quick-del" data-qdel="${item.id}">✕</span>`;
+    li.innerHTML = quickItemHtml(item);
     list.appendChild(li);
     wireQuickItem(li, item);
+    updateQuickBudgetSummary();
 
     input.value = '';
+    if(priceInput) priceInput.value = '';
     input.focus();
   }
   const quickAddBtn = document.getElementById('quickAddBtn');
   if(quickAddBtn) quickAddBtn.onclick = addQuickItem;
   const quickAddInput = document.getElementById('quickAddInput');
   if(quickAddInput) quickAddInput.addEventListener('keydown', e => { if(e.key==='Enter') addQuickItem(); });
+  const quickAddPrice = document.getElementById('quickAddPrice');
+  if(quickAddPrice) quickAddPrice.addEventListener('keydown', e => { if(e.key==='Enter') addQuickItem(); });
 
   document.querySelectorAll('[data-ttoggle]').forEach(el => el.onclick = () => {
     const t = state.todoList.find(x => x.id === el.getAttribute('data-ttoggle'));

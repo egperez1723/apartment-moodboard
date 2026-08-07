@@ -87,6 +87,31 @@
   .info-modal input{ width:100%; font-family:'Work Sans', sans-serif; font-size:14px; padding:9px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); margin-bottom:10px; }
   .info-field-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:1px; margin:2px 0 4px 0; }
 
+  .receipt{
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 18px 16px;
+    font-family: 'Work Sans', sans-serif;
+    box-shadow: 0 3px 10px rgba(74,63,49,0.08);
+    background-image:
+      linear-gradient(135deg, var(--paper) 8px, transparent 0),
+      linear-gradient(-135deg, var(--paper) 8px, transparent 0),
+      linear-gradient(45deg, var(--paper) 8px, transparent 0),
+      linear-gradient(-45deg, var(--paper) 8px, transparent 0);
+    background-position: top left, top right, bottom left, bottom right;
+    background-size: 16px 16px;
+    background-repeat: no-repeat;
+  }
+  .receipt-row{ display:flex; align-items:baseline; gap:6px; font-size:12.5px; padding:4px 0; color:var(--ink); }
+  .receipt-row.done{ color:var(--sage-dark); }
+  .receipt-item{ flex-shrink:0; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .receipt-dots{ flex:1; border-bottom:1px dotted var(--line); margin-bottom:3px; }
+  .receipt-price{ flex-shrink:0; font-weight:600; }
+  .receipt-divider{ border-top:1px dashed var(--line); margin:8px 0; }
+  .receipt-total{ font-size:13.5px; font-weight:700; }
+  .receipt-total.spent{ color:var(--sage-dark); }
+
   .quick-section{
     background: var(--paper);
     border: 2px dashed var(--butter);
@@ -190,6 +215,8 @@
   .card-del{ position:absolute; top:-2px; right:0; font-size: 13px; color: var(--ink-soft); cursor:pointer; flex-shrink:0; }
   .doodle{ width:16px; height:16px; flex-shrink:0; opacity:0.75; }
   .sub-badge{ font-size:10px; color:var(--ink-soft); background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:1px 7px; flex-shrink:0; }
+  .card-price-tag{ font-size:10px; color:var(--sage-dark); background:rgba(143,164,120,0.15); border-radius:10px; padding:1px 7px; flex-shrink:0; font-weight:600; }
+  .modal-price-input{ width:100%; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); margin:8px 0 4px 0; }
   .card-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); }
   .expand-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--cream); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .item-done-btn{ width:32px; height:32px; border-radius:50%; background:var(--sage-dark); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
@@ -308,7 +335,8 @@ function defaultState(){
     info: { unitNumber: '', address: '', storageUnit: '', storageAddress: '', storageCode: '' },
     quickList: [],
     todoList: [],
-    infoCollapsed: false
+    infoCollapsed: false,
+    budgetCollapsed: false
   };
 }
 
@@ -323,6 +351,7 @@ function normalizeState(){
   if(!state.quickList) state.quickList = [];
   if(!state.todoList) state.todoList = [];
   if(state.infoCollapsed === undefined) state.infoCollapsed = false;
+  if(state.budgetCollapsed === undefined) state.budgetCollapsed = false;
   if(state.bought.length > 0){
     let restoreCat = state.categories.find(c => c.name === 'previously completed');
     if(!restoreCat){
@@ -476,8 +505,8 @@ function render(){
   `;
   html += renderCountdown();
   html += renderInfoCard();
-  html += `<div class="tab-bar">
-    <span class="tab-btn ${activeTab==='board'?'active':''}" data-tab="board">mood board</span>
+  html += renderBudgetSection();
+  html += `<div class="tab-bar">    <span class="tab-btn ${activeTab==='board'?'active':''}" data-tab="board">mood board</span>
     <span class="tab-btn ${activeTab==='quick'?'active':''}" data-tab="quick">shopping list</span>
     <span class="tab-btn ${activeTab==='todo'?'active':''}" data-tab="todo">stuff to do</span>
   </div>`;
@@ -561,6 +590,7 @@ function render(){
           <div class="card-title-static">${escapeHtml(it.title)}</div>
           ${it.notes ? `<span class="note-indicator" title="has a note">${NOTE_ICON}</span>` : ''}
           ${subs.length > 0 ? `<span class="sub-badge">${doneCount}/${subs.length}</span>` : ''}
+          ${it.price ? `<span class="card-price-tag">$${Number(it.price).toFixed(2)}</span>` : ''}
           <span class="card-del" data-carddel="${it.id}" data-cat="${cat.id}">✕</span>
         </div>
 
@@ -604,6 +634,7 @@ function render(){
             <div class="card-title" contenteditable="true" data-itemtitle="${openItem.id}" data-cat="${openCat.id}" style="font-size:19px; text-align:left; flex:1;">${escapeHtml(openItem.title)}</div>
             <span class="item-done-btn" id="itemViewClose" style="margin-left:8px; background:${openCColor};">${CHECK_ICON}</span>
           </div>
+          <input type="text" inputmode="decimal" class="modal-price-input" id="itemViewPriceInput" placeholder="price (optional)" maxlength="10" value="${openItem.price ? openItem.price : ''}" data-item="${openItem.id}" data-cat="${openCat.id}" />
 
           <div class="modal-section-label">sub-items</div>
           ${subs.length > 0 ? `<ul class="subitems">
@@ -665,6 +696,7 @@ function render(){
       <div class="modal-box modal-box-lg">
         <div class="modal-title">New item${cat ? ` in ${escapeHtml(cat.name)}` : ''}</div>
         <input type="text" id="itemTitleInput" placeholder="e.g. Bedding" maxlength="40" value="${escapeHtml(itemDraft.title)}" />
+        <input type="text" inputmode="decimal" id="itemPriceInput" placeholder="price (optional) — e.g. 24.99" maxlength="10" value="${escapeHtml(itemDraft.price || '')}" />
 
         <div class="modal-section-label">sub-items</div>
         ${itemDraft.subitems.length > 0 ? `<ul class="subitems">
@@ -802,6 +834,42 @@ function renderInfoCard(){
   }
 
   return html;
+}
+
+function renderBudgetSection(){
+  const receiptItems = [];
+  state.categories.forEach(cat => {
+    (cat.items||[]).forEach(it => {
+      if(it.price) receiptItems.push({name: it.title, price: Number(it.price), done: !!it.completed});
+    });
+  });
+  (state.quickList||[]).forEach(q => {
+    if(q.price) receiptItems.push({name: q.text, price: Number(q.price), done: !!q.done});
+  });
+
+  if(receiptItems.length === 0) return '';
+
+  const totalAll = receiptItems.reduce((s,r)=>s+r.price, 0);
+  const totalSpent = receiptItems.filter(r=>r.done).reduce((s,r)=>s+r.price, 0);
+
+  let body = '';
+  if(!state.budgetCollapsed){
+    body = `<div class="receipt">
+      ${receiptItems.map(r => `<div class="receipt-row ${r.done?'done':''}"><span class="receipt-item">${escapeHtml(r.name)}</span><span class="receipt-dots"></span><span class="receipt-price">$${r.price.toFixed(2)}</span></div>`).join('')}
+      <div class="receipt-divider"></div>
+      <div class="receipt-row receipt-total"><span class="receipt-item">total planned</span><span class="receipt-dots"></span><span class="receipt-price">$${totalAll.toFixed(2)}</span></div>
+      <div class="receipt-row receipt-total spent"><span class="receipt-item">spent so far</span><span class="receipt-dots"></span><span class="receipt-price">$${totalSpent.toFixed(2)}</span></div>
+    </div>`;
+  }
+
+  return `<div class="info-section">
+    <div class="info-header">
+      <div class="info-header-title" id="budgetCollapseToggle">
+        <span class="info-chevron ${state.budgetCollapsed ? 'collapsed' : ''}">▾</span> budget tracker
+      </div>
+    </div>
+    ${body}
+  </div>`;
 }
 
 function renderQuickList(){
@@ -1040,8 +1108,10 @@ function attachEvents(){
   function syncItemDraftFromInputs(){
     const t = document.getElementById('itemTitleInput');
     const n = document.getElementById('itemNotesInput');
+    const p = document.getElementById('itemPriceInput');
     if(t) itemDraft.title = t.value;
     if(n) itemDraft.notes = n.value;
+    if(p) itemDraft.price = p.value;
   }
 
   const itemModalOverlay = document.getElementById('itemModalOverlay');
@@ -1053,10 +1123,12 @@ function attachEvents(){
     syncItemDraftFromInputs();
     const cat = state.categories.find(c => c.id === addingItemCat);
     if(cat){
+      const priceVal = (itemDraft.price || '').trim();
       cat.items.push({
         id: uid(),
         title: itemDraft.title.trim() || 'New item',
         notes: itemDraft.notes.trim(),
+        price: priceVal ? (parseFloat(priceVal) || 0) : 0,
         subitems: itemDraft.subitems,
         links: itemDraft.links,
         images: itemDraft.images
@@ -1144,6 +1216,18 @@ function attachEvents(){
     });
   });
 
+  const itemViewPriceInput = document.getElementById('itemViewPriceInput');
+  if(itemViewPriceInput){
+    itemViewPriceInput.addEventListener('blur', () => {
+      const {item} = findGroup(itemViewPriceInput.getAttribute('data-cat'), itemViewPriceInput.getAttribute('data-item'));
+      if(item){
+        const val = itemViewPriceInput.value.trim();
+        item.price = val ? (parseFloat(val) || 0) : 0;
+        saveData();
+      }
+    });
+  }
+
   const backupLink = document.getElementById('backupLink');
   if(backupLink) backupLink.onclick = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
@@ -1191,6 +1275,9 @@ function attachEvents(){
   if(infoEditBtn) infoEditBtn.onclick = () => { editingInfo = true; render(); };
   const infoCollapseToggle = document.getElementById('infoCollapseToggle');
   if(infoCollapseToggle) infoCollapseToggle.onclick = () => { state.infoCollapsed = !state.infoCollapsed; render(); saveData(); };
+
+  const budgetCollapseToggle = document.getElementById('budgetCollapseToggle');
+  if(budgetCollapseToggle) budgetCollapseToggle.onclick = () => { state.budgetCollapsed = !state.budgetCollapsed; render(); saveData(); };
 
   document.querySelectorAll('[data-copyval]').forEach(el => el.onclick = () => {
     const val = el.getAttribute('data-copyval');
@@ -1262,7 +1349,7 @@ function attachEvents(){
 
   document.querySelectorAll('[data-addgroup]').forEach(el => el.onclick = () => {
     addingItemCat = el.getAttribute('data-addgroup');
-    itemDraft = {title:'', notes:'', subitems:[], links:[], images:[]};
+    itemDraft = {title:'', notes:'', price:'', subitems:[], links:[], images:[]};
     modalAddingSub = false;
     modalAddingLink = false;
     render();

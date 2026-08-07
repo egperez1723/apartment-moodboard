@@ -68,7 +68,9 @@
   .info-section{
     margin: 0 0 30px 0;
   }
-  .info-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .quick-access-row{ display:flex; gap:10px; margin-bottom:24px; }
+  .quick-access-btn{ display:flex; align-items:center; gap:7px; font-family:'Work Sans', sans-serif; font-weight:600; font-size:12px; letter-spacing:0.5px; color:var(--terracotta); background:rgba(217,138,99,0.12); padding:9px 16px; border-radius:20px; cursor:pointer; }
+  .quick-access-btn svg{ width:14px; height:14px; flex-shrink:0; }
   .info-header-actions{ display:flex; align-items:center; gap:8px; }
   .info-header-title{ font-family:'Work Sans', sans-serif; font-weight:700; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--terracotta); cursor:pointer; display:flex; align-items:center; gap:8px; background:rgba(217,138,99,0.14); padding:8px 14px; border-radius:20px; }
   .info-chevron{ font-size:13px; color:var(--terracotta); transition: transform 0.2s ease; display:inline-block; }
@@ -780,41 +782,11 @@ function formatMoveInDateTime(dateStr){
 
 function renderInfoCard(){
   const info = state.info || {};
-  const tiles = [];
-  const moveInFmt = formatMoveInDateTime(state.moveInDate);
-  if(moveInFmt) tiles.push(['move-in', moveInFmt, false, false]);
-  if(info.unitNumber) tiles.push(['unit', info.unitNumber, false, false]);
-  if(info.address) tiles.push(['address', info.address, true, true]);
-  if(info.storageUnit) tiles.push(['storage #', info.storageUnit, false, false]);
-  if(info.storageCode) tiles.push(['storage code', info.storageCode, false, true]);
-  if(info.storageAddress) tiles.push(['storage address', info.storageAddress, true, true]);
-
-  let body;
-  if(tiles.length === 0){
-    body = `<div class="info-empty">add your unit number, address, and other move-in details</div>`;
-  } else {
-    body = `<div class="info-grid">${tiles.map(([label, val, wide, copyable]) => `<div class="info-tile ${wide?'wide':''}">
-      <div class="info-tile-label">${escapeHtml(label)}</div>
-      <div class="info-tile-row">
-        <div class="info-tile-value">${escapeHtml(val)}</div>
-        ${copyable ? `<span class="info-copy-btn" data-copyval="${escapeHtml(val)}" title="copy">${COPY_ICON}</span>` : ''}
-      </div>
-    </div>`).join('')}</div>`;
-  }
-
   const hasBudgetData = state.categories.some(c => (c.items||[]).some(it => it.price)) || (state.quickList||[]).some(q => q.price);
 
-  let html = `<div class="info-section">
-    <div class="info-header">
-      <div class="info-header-title" id="infoCollapseToggle">
-        <span class="info-chevron ${state.infoCollapsed ? 'collapsed' : ''}">▾</span> move-in info
-      </div>
-      <div class="info-header-actions">
-        ${hasBudgetData ? `<button class="info-editbtn" id="budgetOpenBtn" title="budget tracker">${RECEIPT_ICON}</button>` : ''}
-        <button class="info-editbtn" id="infoEditBtn" title="edit info">${PENCIL_ICON}</button>
-      </div>
-    </div>
-    ${state.infoCollapsed ? '' : body}
+  let html = `<div class="quick-access-row">
+    <span class="quick-access-btn" id="infoOpenBtn">${PENCIL_ICON} move-in info</span>
+    ${hasBudgetData ? `<span class="quick-access-btn" id="budgetOpenBtn">${RECEIPT_ICON} budget</span>` : ''}
   </div>`;
 
   if(editingInfo){
@@ -1272,10 +1244,8 @@ function attachEvents(){
     editingDate = false; render(); saveData();
   };
 
-  const infoEditBtn = document.getElementById('infoEditBtn');
-  if(infoEditBtn) infoEditBtn.onclick = () => { editingInfo = true; render(); };
-  const infoCollapseToggle = document.getElementById('infoCollapseToggle');
-  if(infoCollapseToggle) infoCollapseToggle.onclick = () => { state.infoCollapsed = !state.infoCollapsed; render(); saveData(); };
+  const infoOpenBtn = document.getElementById('infoOpenBtn');
+  if(infoOpenBtn) infoOpenBtn.onclick = () => { editingInfo = true; render(); };
 
   const budgetOpenBtn = document.getElementById('budgetOpenBtn');
   if(budgetOpenBtn) budgetOpenBtn.onclick = () => { budgetModalOpen = true; render(); };

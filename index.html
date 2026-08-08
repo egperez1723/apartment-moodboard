@@ -218,11 +218,8 @@
 
   .card{ background: var(--paper); border-radius: 14px; padding: 14px; position: relative; box-shadow: 2px 3px 0 rgba(74,63,49,0.08); border: 1px solid var(--line); }
 
-  .card-pin{ position:absolute; top:-8px; left:50%; transform:translateX(-50%) rotate(-7deg); width:15px; height:15px; border-radius:50%; box-shadow:0 2px 4px rgba(74,63,49,0.35); z-index:3; }
-  .card-pin::before{ content:""; position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.65), transparent 60%); }
-  .card-pin::after{ content:""; position:absolute; top:12px; left:6.5px; width:1.5px; height:6px; background:var(--ink-soft); }
-  .card-pin2{ position:absolute; top:-7px; right:18px; left:auto; transform:rotate(10deg); width:12px; height:12px; }
-  .card-pin2::after{ left:5.5px; height:5px; }
+  .washi{ position:absolute; top:-9px; left: 16px; width: 44px; height: 16px; opacity:0.85; border-radius: 2px; }
+  .washi2{ position:absolute; top:-7px; right: 18px; width: 34px; height: 14px; opacity:0.8; border-radius: 2px; transform: rotate(6deg); }
   .washi3{ position:absolute; bottom:-7px; left: 40%; width: 30px; height: 13px; opacity:0.75; border-radius: 2px; transform: rotate(-4deg); }
 
   .card-top{ display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:8px; position:relative; }
@@ -675,8 +672,8 @@ function render(){
       const subsWithPrice = subs.filter(s => s.price);
       const cardDisplayPrice = subsWithPrice.length > 0 ? subsWithPrice.reduce((sum,s)=>sum+Number(s.price),0) : (it.price || 0);
       html += `<div class="card ${it.completed?'completed':''}" data-cardopen="${it.id}" draggable="true" data-dragitem="${it.id}" data-dragcat="${cat.id}">
-        <div class="card-pin" style="background:${cColor};"></div>
-        ${(it.images.length + it.links.length) > 3 ? `<div class="card-pin card-pin2" style="background:${catColor(catIndex+1)};"></div>` : ''}
+        <div class="washi" style="background:${cColor};"></div>
+        ${(it.images.length + it.links.length) > 3 ? `<div class="washi2" style="background:${catColor(catIndex+1)};"></div>` : ''}
         ${it.completed ? `<div class="completed-overlay" style="background:${cColor};"></div><div class="completed-badge" style="background:${cColor};">${CHECK_ICON}</div>` : ''}
         <div class="card-top">
           <div class="card-title-static">${escapeHtml(it.title)}</div>

@@ -305,10 +305,11 @@
   .completed-badge svg{ width:11px; height:11px; }
   .card.completed .card-title-static{ text-decoration:line-through; opacity:0.7; }
 
-  .cat-mood-toggle{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:6px; }
+  .cat-mood-toggle{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+  .cat-icon-group{ display:flex; align-items:center; gap:6px; margin-left:6px; }
   .cat-mood-toggle svg{ width:12px; height:12px; }
   .cat-mood-toggle.active{ background:var(--terracotta); border-color:var(--terracotta); color:white; }
-  .cat-quick-add{ position:relative; margin-left:6px; }
+  .cat-quick-add{ position:relative; display:flex; align-items:center; }
   .cat-quick-menu{ position:absolute; top:30px; right:0; background:var(--paper); border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 12px rgba(74,63,49,0.18); z-index:20; min-width:130px; overflow:hidden; }
   .cat-quick-menu-item{ display:flex; align-items:center; gap:8px; padding:10px 14px; font-size:12.5px; color:var(--ink); cursor:pointer; white-space:nowrap; }
   .cat-quick-menu-item:hover{ background:var(--cream); }
@@ -651,13 +652,15 @@ function render(){
         <span class="cat-dot" style="background:${cColor};"></span>
         <div class="cat-name hand" contenteditable="true" data-catname="${cat.id}" style="border-bottom-color:${cColor};">${escapeHtml(cat.name)}</div>
         <div class="cat-meta">${items.length} item${items.length===1?'':'s'}</div>
-        <span class="cat-mood-toggle ${inMoodView?'active':''}" data-moodview="${cat.id}" title="mood board view">${IMAGE_ICON}</span>
-        <div class="cat-quick-add">
-          <span class="cat-mood-toggle" data-quickaddtoggle="${cat.id}" title="add">+</span>
-          ${catQuickAddOpen === cat.id ? `<div class="cat-quick-menu">
-            <div class="cat-quick-menu-item" data-quickadditem="${cat.id}">${CARD_ICON} add item</div>
-            <div class="cat-quick-menu-item" data-quickaddphoto="${cat.id}">${IMAGE_ICON} add picture</div>
-          </div>` : ''}
+        <div class="cat-icon-group">
+          <div class="cat-quick-add">
+            <span class="cat-mood-toggle" data-quickaddtoggle="${cat.id}" title="add">+</span>
+            ${catQuickAddOpen === cat.id ? `<div class="cat-quick-menu">
+              <div class="cat-quick-menu-item" data-quickadditem="${cat.id}">${CARD_ICON} add item</div>
+              <div class="cat-quick-menu-item" data-quickaddphoto="${cat.id}">${IMAGE_ICON} add picture</div>
+            </div>` : ''}
+          </div>
+          <span class="cat-mood-toggle ${inMoodView?'active':''}" data-moodview="${cat.id}" title="mood board view">${IMAGE_ICON}</span>
         </div>
         ${catEditMode ? `<div class="cat-edit-actions"><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
       </div>`;

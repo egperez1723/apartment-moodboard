@@ -1529,18 +1529,22 @@ function attachEvents(){
     input.type = 'file';
     input.accept = 'image/*';
     input.multiple = true;
+    input.style.cssText = 'position:absolute; left:-9999px; width:1px; height:1px; opacity:0;';
+    document.body.appendChild(input);
+    let handled = false;
     input.addEventListener('change', (ev) => {
+      if(handled) return;
+      handled = true;
       const cat = state.categories.find(c => c.id === catId);
-      if(!cat) return;
-      if(!cat.images) cat.images = [];
       const files = Array.from(ev.target.files || []);
+      if(!cat || files.length === 0){ input.remove(); return; }
+      if(!cat.images) cat.images = [];
       let remaining = files.length;
-      if(remaining === 0) return;
       files.forEach(file => {
         compressImage(file, 400, dataUrl => {
           cat.images.push({id: uid(), data: dataUrl});
           remaining--;
-          if(remaining === 0){ render(); saveData(); }
+          if(remaining === 0){ render(); saveData(); input.remove(); }
         });
       });
     });

@@ -311,7 +311,11 @@
   .mood-photo-grid{ column-count:2; column-gap:10px; }
   @media (min-width: 560px){ .mood-photo-grid{ column-count:3; } }
   .mood-photo{ break-inside:avoid; margin-bottom:10px; border-radius:12px; overflow:hidden; border:1px solid var(--line); position:relative; }
-  .mood-photo-cat{ border:2px solid var(--terracotta); }
+  .mood-photo-cat{ margin-top:8px; overflow:visible; }
+  .mood-photo-cat img{ border-radius:12px; }
+  .mood-pin{ position:absolute; top:-8px; left:50%; transform:translateX(-50%) rotate(-6deg); width:15px; height:15px; border-radius:50%; background:var(--terracotta); box-shadow:0 2px 4px rgba(74,63,49,0.35); z-index:3; }
+  .mood-pin::before{ content:""; position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.65), transparent 60%); }
+  .mood-pin::after{ content:""; position:absolute; top:12px; left:6.5px; width:1.5px; height:6px; background:var(--ink-soft); }
   .mood-photo-del{ position:absolute; top:5px; right:5px; width:20px; height:20px; border-radius:50%; background:rgba(255,253,248,0.9); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:var(--ink-soft); }
   .mood-photo-add{ display:flex; align-items:center; justify-content:center; min-height:70px; border:2px dashed var(--line); background:var(--cream); color:var(--ink-soft); font-size:22px; cursor:pointer; }
   .mood-photo-add input{ display:none; }
@@ -649,7 +653,7 @@ function render(){
       const hasAny = catImgs.length > 0 || allImages.length > 0;
       html += `<div class="mood-photo-grid">`;
       catImgs.forEach(img => {
-        html += `<div class="mood-photo mood-photo-cat"><img src="${img.data}" alt="category inspo" /><span class="mood-photo-del" data-catimgdel="${img.id}" data-cat="${cat.id}">✕</span></div>`;
+        html += `<div class="mood-photo mood-photo-cat"><span class="mood-pin"></span><img src="${img.data}" alt="category inspo" /><span class="mood-photo-del" data-catimgdel="${img.id}" data-cat="${cat.id}">✕</span></div>`;
       });
       allImages.forEach(({img,title}) => {
         html += `<div class="mood-photo"><img src="${img.data}" alt="${escapeHtml(title)}" /></div>`;

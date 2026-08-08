@@ -317,9 +317,7 @@
   .mood-pin::before{ content:""; position:absolute; top:2px; left:4px; width:5px; height:4px; border-radius:50%; background:rgba(255,255,255,0.5); }
   .mood-pin::after{ content:""; position:absolute; top:13px; left:7px; width:1.5px; height:6px; background:var(--ink-soft); border-radius:1px; }
   .mood-photo-del{ position:absolute; top:5px; right:5px; width:20px; height:20px; border-radius:50%; background:rgba(255,253,248,0.9); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:var(--ink-soft); }
-  .cat-inspo-card{ cursor:default; }
-  .cat-inspo-card:hover{ transform:none !important; box-shadow: 2px 3px 0 rgba(74,63,49,0.08) !important; }
-  .cat-inspo-label{ font-family:'Fraunces', serif; font-style:italic; font-size:13px; text-align:center; color:var(--ink-soft); margin-bottom:8px; }
+  .cat-inspo-frame{ break-inside:avoid; display:inline-block; width:100%; margin-bottom:14px; position:relative; padding:6px; border:2px solid var(--line); border-radius:10px; }
   .mood-photo-add{ display:flex; align-items:center; justify-content:center; min-height:70px; border:2px dashed var(--line); background:var(--cream); color:var(--ink-soft); font-size:22px; cursor:pointer; }
   .mood-photo-add input{ display:none; }
   .mood-photo img{ width:100%; display:block; }
@@ -674,9 +672,8 @@ function render(){
 
     if((cat.images||[]).length > 0){
       const catImgs = cat.images;
-      html += `<div class="card cat-inspo-card">
+      html += `<div class="cat-inspo-frame">
         <span class="mood-pin" style="background:${cColor};"></span>
-        <div class="cat-inspo-label">${escapeHtml(cat.name)} inspo</div>
         <div class="img-grid ${(catImgs.length===1?'n1':(catImgs.length===3?'n3':(catImgs.length===2?'n2':'nmany')))}">
           ${catImgs.map(img => `<div class="img-thumb-wrap"><img src="${img.data}" /></div>`).join('')}
         </div>

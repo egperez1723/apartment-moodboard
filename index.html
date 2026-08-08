@@ -308,6 +308,11 @@
   .cat-mood-toggle{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:6px; }
   .cat-mood-toggle svg{ width:12px; height:12px; }
   .cat-mood-toggle.active{ background:var(--terracotta); border-color:var(--terracotta); color:white; }
+  .cat-quick-add{ position:relative; margin-left:6px; }
+  .cat-quick-menu{ position:absolute; top:30px; right:0; background:var(--paper); border:1px solid var(--line); border-radius:12px; box-shadow:0 4px 12px rgba(74,63,49,0.18); z-index:20; min-width:130px; overflow:hidden; }
+  .cat-quick-menu-item{ display:flex; align-items:center; gap:8px; padding:10px 14px; font-size:12.5px; color:var(--ink); cursor:pointer; white-space:nowrap; }
+  .cat-quick-menu-item:hover{ background:var(--cream); }
+  .cat-quick-menu-item svg{ width:14px; height:14px; flex-shrink:0; color:var(--ink-soft); }
   .mood-photo-grid{ column-count:2; column-gap:10px; }
   @media (min-width: 560px){ .mood-photo-grid{ column-count:3; } }
   .mood-photo{ break-inside:avoid; margin-bottom:10px; border-radius:12px; overflow:hidden; border:1px solid var(--line); position:relative; }
@@ -550,6 +555,7 @@ let openItemId = null;
 let addingCategory = false;
 let catEditMode = false;
 let moodViewCats = new Set();
+let catQuickAddOpen = null;
 let budgetModalOpen = false;
 let editingQuickId = null;
 let editingInfo = false;
@@ -646,6 +652,13 @@ function render(){
         <div class="cat-name hand" contenteditable="true" data-catname="${cat.id}" style="border-bottom-color:${cColor};">${escapeHtml(cat.name)}</div>
         <div class="cat-meta">${items.length} item${items.length===1?'':'s'}</div>
         <span class="cat-mood-toggle ${inMoodView?'active':''}" data-moodview="${cat.id}" title="mood board view">${IMAGE_ICON}</span>
+        <div class="cat-quick-add">
+          <span class="cat-mood-toggle" data-quickaddtoggle="${cat.id}" title="add">+</span>
+          ${catQuickAddOpen === cat.id ? `<div class="cat-quick-menu">
+            <div class="cat-quick-menu-item" data-quickadditem="${cat.id}">${CARD_ICON} add item</div>
+            <div class="cat-quick-menu-item" data-quickaddphoto="${cat.id}">${IMAGE_ICON} add picture</div>
+          </div>` : ''}
+        </div>
         ${catEditMode ? `<div class="cat-edit-actions"><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
       </div>`;
 
@@ -1482,15 +1495,61 @@ function attachEvents(){
     el.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); el.blur(); } });
   });
 
-  document.querySelectorAll('[data-addgroup]').forEach(el => el.onclick = () => {
-    addingItemCat = el.getAttribute('data-addgroup');
+  function startAddItem(catId){
+    addingItemCat = catId;
     itemDraft = {title:'', notes:'', price:'', subitems:[], links:[], images:[]};
     modalAddingSub = false;
     modalAddingLink = false;
+    catQuickAddOpen = null;
     render();
     const t = document.getElementById('itemTitleInput');
     if(t) t.focus();
+  }
+  document.querySelectorAll('[data-addgroup]').forEach(el => el.onclick = () => startAddItem(el.getAttribute('data-addgroup')));
+
+  document.querySelectorAll('[data-quickaddtoggle]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    const catId = el.getAttribute('data-quickaddtoggle');
+    catQuickAddOpen = (catQuickAddOpen === catId) ? null : catId;
+    render();
   });
+  document.querySelectorAll('[data-quickadditem]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    startAddItem(el.getAttribute('data-quickadditem'));
+  });
+  document.querySelectorAll('[data-quickaddphoto]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    const catId = el.getAttribute('data-quickaddphoto');
+    catQuickAddOpen = null;
+    render();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.addEventListener('change', (ev) => {
+      const cat = state.categories.find(c => c.id === catId);
+      if(!cat) return;
+      if(!cat.images) cat.images = [];
+      const files = Array.from(ev.target.files || []);
+      let remaining = files.length;
+      if(remaining === 0) return;
+      files.forEach(file => {
+        compressImage(file, 400, dataUrl => {
+          cat.images.push({id: uid(), data: dataUrl});
+          remaining--;
+          if(remaining === 0){ render(); saveData(); }
+        });
+      });
+    });
+    input.click();
+  });
+  if(catQuickAddOpen !== null){
+    document.addEventListener('click', function closeQuickAdd(){
+      catQuickAddOpen = null;
+      render();
+      document.removeEventListener('click', closeQuickAdd);
+    }, {once: true});
+  }
 
   document.querySelectorAll('[data-itemtitle]').forEach(el => {
     el.addEventListener('blur', () => {

@@ -268,7 +268,9 @@
   .sub-text{ flex:1; cursor:pointer; }
   .sub-text.done{ text-decoration:line-through; color:var(--ink-soft); }
   .sub-del{ font-size:11px; color:var(--line); cursor:pointer; }
-  .sub-edit-input{ flex:1; font-family:'Work Sans', sans-serif; font-size:13px; padding:5px 8px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); }
+  .sub-edit-input{ flex:1; min-width:0; font-family:'Work Sans', sans-serif; font-size:13px; padding:5px 8px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); box-sizing:border-box; }
+  .sub-edit-price{ flex:0 0 54px; min-width:0; font-family:'Work Sans', sans-serif; font-size:13px; padding:5px 6px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); box-sizing:border-box; }
+  .sub-price{ color:var(--sage-dark); font-weight:600; font-size:12px; }
   .sub-del:hover{ color:var(--terracotta); }
   .add-sub-row{ display:flex; align-items:center; gap:6px; margin-top:4px; }
   .add-sub-row input{ flex:1; font-size:12px; font-family:'Work Sans', sans-serif; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:var(--cream); }
@@ -599,6 +601,8 @@ function render(){
     sortedItems.forEach(it => {
       const subs = it.subitems || [];
       const doneCount = subs.filter(s=>s.done).length;
+      const subsWithPrice = subs.filter(s => s.price);
+      const cardDisplayPrice = subsWithPrice.length > 0 ? subsWithPrice.reduce((sum,s)=>sum+Number(s.price),0) : (it.price || 0);
       html += `<div class="card ${it.completed?'completed':''}" data-cardopen="${it.id}" draggable="true" data-dragitem="${it.id}" data-dragcat="${cat.id}">
         <div class="washi" style="background:${cColor};"></div>
         ${(it.images.length + it.links.length) > 3 ? `<div class="washi2" style="background:${catColor(catIndex+1)};"></div>` : ''}
@@ -607,7 +611,7 @@ function render(){
           <div class="card-title-static">${escapeHtml(it.title)}</div>
           ${it.notes ? `<span class="note-indicator" title="has a note">${NOTE_ICON}</span>` : ''}
           ${subs.length > 0 ? `<span class="sub-badge">${doneCount}/${subs.length}</span>` : ''}
-          ${it.price ? `<span class="card-price-tag">$${Number(it.price).toFixed(2)}</span>` : ''}
+          ${cardDisplayPrice ? `<span class="card-price-tag">$${cardDisplayPrice.toFixed(2)}</span>` : ''}
           <span class="card-del" data-carddel="${it.id}" data-cat="${cat.id}">✕</span>
         </div>
 
@@ -657,10 +661,11 @@ function render(){
           ${subs.length > 0 ? `<ul class="subitems">
             ${subs.map(s => editingSubId === s.id ? `<li class="subitem">
               <input type="text" class="sub-edit-input" id="subEditInput" value="${escapeHtml(s.text)}" maxlength="40" data-item="${openItem.id}" data-cat="${openCat.id}" data-sub="${s.id}" autofocus />
+              <input type="text" inputmode="decimal" class="sub-edit-price" id="subEditPrice" placeholder="$" maxlength="10" value="${s.price ? s.price : ''}" />
               <span class="mini-plus" data-subeditconfirm="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}">${CHECK_ICON}</span>
             </li>` : `<li class="subitem">
               <div class="sub-check ${s.done?'done':''}" data-subtoggle="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}"></div>
-              <div class="sub-text ${s.done?'done':''}" data-subeditstart="${s.id}">${escapeHtml(s.text)}</div>
+              <div class="sub-text ${s.done?'done':''}" data-subeditstart="${s.id}">${escapeHtml(s.text)}${s.price ? ` <span class="sub-price">$${Number(s.price).toFixed(2)}</span>` : ''}</div>
               <div class="sub-del" data-subdel="${s.id}" data-item="${openItem.id}" data-cat="${openCat.id}">✕</div>
             </li>`).join('')}
           </ul>` : ''}
@@ -862,7 +867,14 @@ function renderBudgetModal(){
   const receiptItems = [];
   state.categories.forEach(cat => {
     (cat.items||[]).forEach(it => {
-      if(it.price) receiptItems.push({name: it.title, price: Number(it.price), done: !!it.completed});
+      const subsWithPrice = (it.subitems||[]).filter(s => s.price);
+      if(subsWithPrice.length > 0){
+        subsWithPrice.forEach(s => {
+          receiptItems.push({name: `${it.title} — ${s.text}`, price: Number(s.price), done: !!s.done});
+        });
+      } else if(it.price){
+        receiptItems.push({name: it.title, price: Number(it.price), done: !!it.completed});
+      }
     });
   });
   (state.quickList||[]).forEach(q => {
@@ -1469,7 +1481,11 @@ function attachEvents(){
   document.querySelectorAll('[data-subtoggle]').forEach(el => el.onclick = () => {
     const {item} = findGroup(el.getAttribute('data-cat'), el.getAttribute('data-item'));
     const s = item && item.subitems.find(s => s.id === el.getAttribute('data-subtoggle'));
-    if(s){ s.done = !s.done; render(); saveData(); }
+    if(s){
+      s.done = !s.done;
+      if(s.done && !s.price){ editingSubId = s.id; }
+      render(); saveData();
+    }
   });
   document.querySelectorAll('[data-subdel]').forEach(el => el.onclick = () => {
     const {item} = findGroup(el.getAttribute('data-cat'), el.getAttribute('data-item'));
@@ -1487,6 +1503,7 @@ function attachEvents(){
   });
   function confirmSubEdit(){
     const input = document.getElementById('subEditInput');
+    const priceInput = document.getElementById('subEditPrice');
     if(!input) return;
     const catId = input.getAttribute('data-cat');
     const itemId = input.getAttribute('data-item');
@@ -1494,20 +1511,37 @@ function attachEvents(){
     const text = input.value.trim();
     const {item} = findGroup(catId, itemId);
     const s = item && item.subitems.find(s => s.id === subId);
-    if(s && text){ s.text = text; }
+    if(s && text){
+      s.text = text;
+      const priceVal = priceInput ? priceInput.value.trim() : '';
+      s.price = priceVal ? (parseFloat(priceVal) || 0) : 0;
+    }
     editingSubId = null;
     render(); saveData();
   }
   document.querySelectorAll('[data-subeditconfirm]').forEach(el => el.onclick = confirmSubEdit);
   const subEditInput = document.getElementById('subEditInput');
+  const subEditPrice = document.getElementById('subEditPrice');
   if(subEditInput){
-    subEditInput.focus();
-    subEditInput.select();
+    let focusPrice = false;
+    if(subEditPrice){
+      const {item} = findGroup(subEditInput.getAttribute('data-cat'), subEditInput.getAttribute('data-item'));
+      const s = item && item.subitems.find(s => s.id === subEditInput.getAttribute('data-sub'));
+      if(s && s.done && !s.price) focusPrice = true;
+    }
+    if(focusPrice){
+      subEditPrice.focus();
+      subEditPrice.select();
+    } else {
+      subEditInput.focus();
+      subEditInput.select();
+    }
     subEditInput.addEventListener('keydown', e => {
       if(e.key==='Enter') confirmSubEdit();
       if(e.key==='Escape'){ editingSubId=null; render(); }
     });
   }
+  if(subEditPrice) subEditPrice.addEventListener('keydown', e => { if(e.key==='Enter') confirmSubEdit(); if(e.key==='Escape'){ editingSubId=null; render(); } });
 
   // links
   document.querySelectorAll('[data-linkdel]').forEach(el => el.onclick = (e) => {

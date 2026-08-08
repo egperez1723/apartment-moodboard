@@ -313,10 +313,13 @@
   .mood-photo{ break-inside:avoid; margin-bottom:10px; border-radius:12px; overflow:hidden; border:1px solid var(--line); position:relative; }
   .mood-photo-cat{ margin-top:8px; overflow:visible; }
   .mood-photo-cat img{ border-radius:12px; }
-  .mood-pin{ position:absolute; top:-8px; left:50%; transform:translateX(-50%) rotate(-6deg); width:15px; height:15px; border-radius:50%; background:var(--terracotta); box-shadow:0 2px 4px rgba(74,63,49,0.35); z-index:3; }
-  .mood-pin::before{ content:""; position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.65), transparent 60%); }
-  .mood-pin::after{ content:""; position:absolute; top:12px; left:6.5px; width:1.5px; height:6px; background:var(--ink-soft); }
+  .mood-pin{ position:absolute; top:-9px; left:50%; transform:translateX(-50%) rotate(-6deg); width:16px; height:16px; border-radius:50%; box-shadow:0 3px 4px rgba(74,63,49,0.3), inset 0 -2px 3px rgba(74,63,49,0.2); z-index:3; }
+  .mood-pin::before{ content:""; position:absolute; top:2px; left:4px; width:5px; height:4px; border-radius:50%; background:rgba(255,255,255,0.5); }
+  .mood-pin::after{ content:""; position:absolute; top:13px; left:7px; width:1.5px; height:6px; background:var(--ink-soft); border-radius:1px; }
   .mood-photo-del{ position:absolute; top:5px; right:5px; width:20px; height:20px; border-radius:50%; background:rgba(255,253,248,0.9); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:var(--ink-soft); }
+  .cat-inspo-card{ cursor:default; }
+  .cat-inspo-card:hover{ transform:none !important; box-shadow: 2px 3px 0 rgba(74,63,49,0.08) !important; }
+  .cat-inspo-label{ font-family:'Fraunces', serif; font-style:italic; font-size:13px; text-align:center; color:var(--ink-soft); margin-bottom:8px; }
   .mood-photo-add{ display:flex; align-items:center; justify-content:center; min-height:70px; border:2px dashed var(--line); background:var(--cream); color:var(--ink-soft); font-size:22px; cursor:pointer; }
   .mood-photo-add input{ display:none; }
   .mood-photo img{ width:100%; display:block; }
@@ -653,7 +656,7 @@ function render(){
       const hasAny = catImgs.length > 0 || allImages.length > 0;
       html += `<div class="mood-photo-grid">`;
       catImgs.forEach(img => {
-        html += `<div class="mood-photo mood-photo-cat"><span class="mood-pin"></span><img src="${img.data}" alt="category inspo" /><span class="mood-photo-del" data-catimgdel="${img.id}" data-cat="${cat.id}">✕</span></div>`;
+        html += `<div class="mood-photo mood-photo-cat"><span class="mood-pin" style="background:${cColor};"></span><img src="${img.data}" alt="category inspo" /><span class="mood-photo-del" data-catimgdel="${img.id}" data-cat="${cat.id}">✕</span></div>`;
       });
       allImages.forEach(({img,title}) => {
         html += `<div class="mood-photo"><img src="${img.data}" alt="${escapeHtml(title)}" /></div>`;
@@ -668,6 +671,17 @@ function render(){
     }
 
     html += `<div class="cards-grid">`;
+
+    if((cat.images||[]).length > 0){
+      const catImgs = cat.images;
+      html += `<div class="card cat-inspo-card">
+        <span class="mood-pin" style="background:${cColor};"></span>
+        <div class="cat-inspo-label">${escapeHtml(cat.name)} inspo</div>
+        <div class="img-grid ${(catImgs.length===1?'n1':(catImgs.length===3?'n3':(catImgs.length===2?'n2':'nmany')))}">
+          ${catImgs.map(img => `<div class="img-thumb-wrap"><img src="${img.data}" /></div>`).join('')}
+        </div>
+      </div>`;
+    }
 
     const sortedItems = [...items].sort((a,b) => (a.completed?1:0) - (b.completed?1:0));
     sortedItems.forEach(it => {

@@ -397,24 +397,85 @@ async function loadData(){
       return;
     }
     if(doc.exists){
-      state = doc.data().state ? JSON.parse(doc.data().state) : defaultState();
-    } else if(isFirstSnapshot){
-      // nothing in Firestore yet — push up whatever we have locally
+      let incoming;
+      try{
+        incoming = doc.data().state ? JSON.parse(doc.data().state) : null;
+      }catch(e){
+        console.error('Firestore data corrupt, keeping current state', e);
+        incoming = null;
+      }
+      if(incoming){
+        // safety check: never silently accept a drastic, unexplained data loss from the cloud
+        const incomingCatCount = (incoming.categories||[]).length;
+        const currentCatCount = (state.categories||[]).length;
+        if(currentCatCount >= 3 && incomingCatCount === 0 && !doc.data().intentionalEmpty){
+          console.error('Blocked a sync that would have wiped', currentCatCount, 'categories down to 0. Keeping current data and backing it up locally.');
+          saveLocalBackup(state);
+          isFirstSnapshot = false;
+          return;
+        }
+        state = incoming;
+      }
+    } else if(isFirstSnapshot && !localStorage.getItem(EVER_CONNECTED_KEY)){
+      // genuinely brand new — nothing in Firestore yet, push up whatever we have locally
       boardRef.set({state: JSON.stringify(state)});
     }
+    localStorage.setItem(EVER_CONNECTED_KEY, '1');
     isFirstSnapshot = false;
     normalizeState();
+    saveLocalBackup(state);
     render();
   }, (err) => {
     console.error('Firestore sync error', err);
   });
 }
 
-async function saveData(){
+const EVER_CONNECTED_KEY = 'apartment-moodboard-ever-connected';
+const BACKUP_KEY_PREFIX = 'apartment-moodboard-autobackup-';
+const BACKUP_SLOT_COUNT = 3;
+
+function saveLocalBackup(s){
+  try{
+    // rotate: shift older backups back before writing the newest into slot 0
+    for(let i = BACKUP_SLOT_COUNT - 1; i > 0; i--){
+      const prev = localStorage.getItem(BACKUP_KEY_PREFIX + (i-1));
+      if(prev) localStorage.setItem(BACKUP_KEY_PREFIX + i, prev);
+    }
+    localStorage.setItem(BACKUP_KEY_PREFIX + '0', JSON.stringify({when: Date.now(), state: s}));
+  }catch(e){ console.error('local backup failed', e); }
+}
+
+function getNewestLocalBackup(){
+  for(let i = 0; i < BACKUP_SLOT_COUNT; i++){
+    const raw = localStorage.getItem(BACKUP_KEY_PREFIX + i);
+    if(raw){ try{ return JSON.parse(raw); }catch(e){} }
+  }
+  return null;
+}
+
+async function saveData(intentionalEmpty){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch(e){ console.error('local save failed', e); }
-  try{ await boardRef.set({state: JSON.stringify(state)}); }
-  catch(e){ console.error('cloud save failed', e); }
+  saveLocalBackup(state);
+  try{ await boardRef.set({state: JSON.stringify(state), intentionalEmpty: !!intentionalEmpty}); }
+  catch(e){
+    console.error('cloud save failed', e);
+    alert('Your change saved on this device, but failed to sync to the cloud (' + (e.message || 'unknown error') + '). It will keep retrying — if this keeps happening, tell Claude.');
+  }
+}
+
+function renderFooter(){
+  const backup = getNewestLocalBackup();
+  const backupAge = backup ? new Date(backup.when).toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : null;
+  return `<footer>
+    <div class="backup-row">
+      <span class="backup-link" id="backupLink">backup board</span>
+      <span class="backup-link" id="restoreLink">restore from backup</span>
+    </div>
+    ${backup ? `<div class="backup-row"><span class="backup-link" id="localRecoverLink">recover local backup from ${backupAge}</span></div>` : ''}
+    <input type="file" id="restoreFileInput" accept="application/json" style="display:none;" />
+    <span class="reset-link" id="resetLink">clear the whole board</span>
+  </footer>`;
 }
 
 function escapeHtml(s){ const d = document.createElement('div'); d.innerText = s || ''; return d.innerHTML; }
@@ -531,14 +592,7 @@ function render(){
 
   if(activeTab === 'quick' || activeTab === 'todo'){
     html += activeTab === 'quick' ? renderQuickList() : renderTodoList();
-    html += `<footer>
-      <div class="backup-row">
-        <span class="backup-link" id="backupLink">backup board</span>
-        <span class="backup-link" id="restoreLink">restore from backup</span>
-      </div>
-      <input type="file" id="restoreFileInput" accept="application/json" style="display:none;" />
-      <span class="reset-link" id="resetLink">clear the whole board</span>
-    </footer>`;
+    html += renderFooter();
     app.innerHTML = html;
     attachEvents();
     return;
@@ -703,14 +757,7 @@ function render(){
     }
   }
 
-  html += `<footer>
-    <div class="backup-row">
-      <span class="backup-link" id="backupLink">backup board</span>
-      <span class="backup-link" id="restoreLink">restore from backup</span>
-    </div>
-    <input type="file" id="restoreFileInput" accept="application/json" style="display:none;" />
-    <span class="reset-link" id="resetLink">clear the whole board</span>
-  </footer>`;
+  html += renderFooter();
 
   if(addingItemCat !== null){
     const cat = state.categories.find(c => c.id === addingItemCat);
@@ -1281,6 +1328,16 @@ function attachEvents(){
   const restoreLink = document.getElementById('restoreLink');
   const restoreFileInput = document.getElementById('restoreFileInput');
   if(restoreLink && restoreFileInput) restoreLink.onclick = () => restoreFileInput.click();
+  const localRecoverLink = document.getElementById('localRecoverLink');
+  if(localRecoverLink) localRecoverLink.onclick = () => {
+    const backup = getNewestLocalBackup();
+    if(!backup) return;
+    if(!confirm('Restore from this device\'s local backup? This replaces what\'s currently shown.')) return;
+    saveLocalBackup(state);
+    state = backup.state;
+    normalizeState();
+    render(); saveData(true);
+  };
   if(restoreFileInput){
     restoreFileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
@@ -1290,9 +1347,10 @@ function attachEvents(){
         try{
           const parsed = JSON.parse(ev.target.result);
           if(!confirm('Replace your current board with this backup?')) return;
+          saveLocalBackup(state);
           state = parsed;
           normalizeState();
-          render(); saveData();
+          render(); saveData(true);
         }catch(err){ alert('That file could not be read as a valid backup.'); }
       };
       reader.readAsText(file);
@@ -1608,8 +1666,11 @@ function addCategory(){
 
 async function resetAll(){
   if(!confirm('Clear the whole board? This removes every category, item, and the completed pile.')) return;
+  if(!confirm('Really sure? This cannot be undone. Everything on the mood board, shopping list stays, but all categories and items will be gone for good.')) return;
+  saveLocalBackup(state);
   state = {title: state.title, moveInDate:null, categories:[], bought:[]};
-  render(); await saveData();
+  normalizeState();
+  render(); await saveData(true);
 }
 
 loadData();

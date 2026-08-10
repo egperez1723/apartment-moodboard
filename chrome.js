@@ -1,9 +1,103 @@
 // The countdown card, move-in info popup, budget tracker popup, and footer
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
-import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState } from './store.js';
+import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature } from './store.js';
 import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON } from './shared.js';
 import { render } from './app.js';
+
+export function renderHomeScreen(){
+  let html = `
+    <header>
+      <div class="eyebrow">senior year</div>
+      <div class="title">your spaces</div>
+      <div class="subtitle">pick a space, or start a new one</div>
+    </header>
+  `;
+
+  if(store.spaces.length === 0){
+    html += `<div class="empty-hint">no spaces yet — add one below to get started</div>`;
+  } else {
+    html += `<div class="cat-edit-row"><span class="cat-edit-toggle" id="homeEditToggle">${ui.homeEditMode ? CHECK_ICON : PENCIL_ICON}</span></div>`;
+    html += `<div class="space-list">`;
+    store.spaces.forEach(s => {
+      const featureLabels = ALL_FEATURES.filter(f => (s.features||[]).includes(f.id)).map(f => f.label);
+      html += `<div class="space-row" data-openspace="${s.id}">
+        <div class="space-row-main">
+          <div class="space-row-name hand">${escapeHtml(s.name)}</div>
+          <div class="space-row-meta">${featureLabels.length ? featureLabels.join(' · ') : 'mood board only'}</div>
+        </div>
+        ${ui.homeEditMode ? `<span class="cat-del-icon" data-delspace="${s.id}">✕</span>` : ''}
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="new-cat-row">
+    <span class="round-plus" id="addSpaceBtn">+</span><span style="font-size:12px; color:var(--ink-soft);">add a space</span>
+  </div>`;
+
+  if(ui.addingSpace){
+    html += `<div class="modal-overlay" id="spaceModalOverlay">
+      <div class="modal-box">
+        <div class="modal-closerow"><span class="expand-btn" id="spaceCloseBtn">${COLLAPSE_ICON}</span></div>
+        <div class="modal-title">New space</div>
+        <input type="text" id="newSpaceInput" placeholder="e.g. CS 301" maxlength="30" />
+        <div class="feature-check-group">
+          ${ALL_FEATURES.map(f => `<label class="feature-check"><input type="checkbox" data-featurecheck="${f.id}" ${ui.newSpaceFeatures.has(f.id) ? 'checked' : ''}/> ${f.label}</label>`).join('')}
+        </div>
+        <div class="modal-actions">
+          <button class="modal-cancel" id="spaceCancelBtn">cancel</button>
+          <button class="modal-add" id="spaceAddBtn">add</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return html;
+}
+
+export function attachHomeEvents(){
+  const homeEditToggle = document.getElementById('homeEditToggle');
+  if(homeEditToggle) homeEditToggle.onclick = () => { ui.homeEditMode = !ui.homeEditMode; render(); };
+
+  document.querySelectorAll('[data-openspace]').forEach(el => el.onclick = (e) => {
+    if(e.target.closest('[data-delspace]')) return;
+    openSpace(el.getAttribute('data-openspace'));
+  });
+  document.querySelectorAll('[data-delspace]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    deleteSpace(el.getAttribute('data-delspace'));
+  });
+
+  const addSpaceBtn = document.getElementById('addSpaceBtn');
+  if(addSpaceBtn) addSpaceBtn.onclick = () => { ui.addingSpace = true; ui.newSpaceFeatures = new Set(); render(); };
+  const spaceCloseBtn = document.getElementById('spaceCloseBtn');
+  if(spaceCloseBtn) spaceCloseBtn.onclick = () => { ui.addingSpace = false; render(); };
+  const spaceCancelBtn = document.getElementById('spaceCancelBtn');
+  if(spaceCancelBtn) spaceCancelBtn.onclick = () => { ui.addingSpace = false; render(); };
+  const spaceModalOverlay = document.getElementById('spaceModalOverlay');
+  if(spaceModalOverlay) spaceModalOverlay.addEventListener('click', (e) => { if(e.target === spaceModalOverlay){ ui.addingSpace = false; render(); } });
+
+  document.querySelectorAll('[data-featurecheck]').forEach(el => el.onchange = () => {
+    const id = el.getAttribute('data-featurecheck');
+    if(el.checked) ui.newSpaceFeatures.add(id); else ui.newSpaceFeatures.delete(id);
+  });
+
+  const spaceAddBtn = document.getElementById('spaceAddBtn');
+  if(spaceAddBtn) spaceAddBtn.onclick = () => {
+    const input = document.getElementById('newSpaceInput');
+    const name = input ? input.value : '';
+    if(!name.trim()){ input && input.focus(); return; }
+    ui.addingSpace = false;
+    createSpace(name, Array.from(ui.newSpaceFeatures));
+  };
+  const newSpaceInput = document.getElementById('newSpaceInput');
+  if(newSpaceInput){
+    newSpaceInput.focus();
+    newSpaceInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') document.getElementById('spaceAddBtn').click(); });
+  }
+}
 
 export function renderCountdown(){
   const d = daysUntil(store.data.moveInDate);
@@ -143,12 +237,18 @@ export function renderFooter(){
   const backupAge = backup ? new Date(backup.when).toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : null;
   return `<footer>
     <div class="backup-row">
+      <span class="backup-link" id="spaceSettingsLink">${ui.spaceSettingsOpen ? 'hide space settings' : 'space settings'}</span>
+    </div>
+    ${ui.spaceSettingsOpen ? `<div class="feature-check-group feature-check-group-footer">
+      ${ALL_FEATURES.map(f => `<label class="feature-check"><input type="checkbox" data-featuretoggle="${f.id}" ${store.features.includes(f.id) ? 'checked' : ''}/> ${f.label}</label>`).join('')}
+    </div>` : ''}
+    <div class="backup-row">
       <span class="backup-link" id="backupLink">backup board</span>
       <span class="backup-link" id="restoreLink">restore from backup</span>
     </div>
     ${backup ? `<div class="backup-row"><span class="backup-link" id="localRecoverLink">recover local backup from ${backupAge}</span></div>` : ''}
     <input type="file" id="restoreFileInput" accept="application/json" style="display:none;" />
-    <span class="reset-link" id="resetLink">clear the whole board</span>
+    <span class="reset-link" id="resetLink">clear this space</span>
   </footer>`;
 }
 
@@ -242,7 +342,7 @@ export function attachChromeEvents(){
     const backup = getNewestLocalBackup();
     if(!backup) return;
     if(!confirm('Restore from this device\'s local backup? This replaces what\'s currently shown.')) return;
-    saveLocalBackup(store.data);
+    saveLocalBackup(store.currentSpaceId, store.data);
     store.data = backup.state;
     normalizeState();
     render(); saveData(true);
@@ -256,7 +356,7 @@ export function attachChromeEvents(){
         try{
           const parsed = JSON.parse(ev.target.result);
           if(!confirm('Replace your current board with this backup?')) return;
-          saveLocalBackup(store.data);
+          saveLocalBackup(store.currentSpaceId, store.data);
           store.data = parsed;
           normalizeState();
           render(); saveData(true);
@@ -269,4 +369,10 @@ export function attachChromeEvents(){
 
 
   document.getElementById('resetLink').onclick = resetAll;
+
+  const spaceSettingsLink = document.getElementById('spaceSettingsLink');
+  if(spaceSettingsLink) spaceSettingsLink.onclick = () => { ui.spaceSettingsOpen = !ui.spaceSettingsOpen; render(); };
+  document.querySelectorAll('[data-featuretoggle]').forEach(el => el.onchange = () => {
+    toggleFeature(el.getAttribute('data-featuretoggle'));
+  });
 }

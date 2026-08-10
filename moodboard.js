@@ -113,7 +113,7 @@ export function renderMoodBoard(){
           ${it.notes ? `<span class="note-indicator" title="has a note">${NOTE_ICON}</span>` : ''}
           ${subs.length > 0 ? `<span class="sub-badge">${doneCount}/${subs.length}</span>` : ''}
           ${cardDisplayPrice ? `<span class="card-price-tag">$${cardDisplayPrice.toFixed(2)}</span>` : ''}
-          <span class="card-del" data-carddel="${it.id}" data-cat="${cat.id}">✕</span>
+          ${ui.catEditMode ? `<span class="card-del" data-carddel="${it.id}" data-cat="${cat.id}">✕</span>` : ''}
         </div>
 
         ${(it.images||[]).length > 0 ? `<div class="img-grid ${(it.images.length===1?'n1':(it.images.length===3?'n3':(it.images.length===2?'n2':'nmany')))}">

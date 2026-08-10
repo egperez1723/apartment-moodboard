@@ -1,7 +1,7 @@
 // The main app shell: bootstraps everything, owns the top-level render()
 // and attachEvents() functions that stitch each feature module together.
 
-import { store, ui, loadData, goHome } from './store.js';
+import { store, ui, loadData, goHome, renameSpace } from './store.js';
 import { escapeHtml } from './shared.js';
 import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, renderHomeScreen,
   attachChromeEvents, attachHomeEvents } from './chrome.js';
@@ -28,7 +28,7 @@ export function render(){
     <header>
       <span class="back-to-spaces" id="backToSpacesBtn">${BACK_ICON} all spaces</span>
       <div class="eyebrow">the space for</div>
-      <div class="title">${escapeHtml(store.data.title)}</div>
+      <div class="title" contenteditable="true" id="spaceTitleInput">${escapeHtml(store.data.title)}</div>
       <div class="title-dots">• • •</div>
       <div class="subtitle">everything for this one, all in one place</div>
     </header>
@@ -68,6 +68,16 @@ export function attachEvents(){
 
   const backBtn = document.getElementById('backToSpacesBtn');
   if(backBtn) backBtn.onclick = () => goHome();
+
+  const spaceTitleInput = document.getElementById('spaceTitleInput');
+  if(spaceTitleInput){
+    spaceTitleInput.addEventListener('blur', () => {
+      const val = spaceTitleInput.innerText.trim();
+      if(val && val !== store.data.title) renameSpace(val);
+      else spaceTitleInput.innerText = store.data.title;
+    });
+    spaceTitleInput.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); spaceTitleInput.blur(); } });
+  }
 
   attachChromeEvents();
   attachListsEvents();

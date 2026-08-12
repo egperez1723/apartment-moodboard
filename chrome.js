@@ -253,14 +253,16 @@ export function renderCourseInfoCard(){
     const rows = [];
     if(ci.professor) rows.push(['professor', ci.professor]);
     if(ci.professorEmail) rows.push(['email', ci.professorEmail]);
-    if(days.length > 0 && (ci.classStart || ci.classEnd)){
+    if(ci.isAsync){
+      rows.push(['format', 'asynchronous — no fixed class time']);
+    } else if(days.length > 0 && (ci.classStart || ci.classEnd)){
       const dayStr = days.map(d => dayLabels[d]).join('');
       const timeStr = [ci.classStart, ci.classEnd].filter(Boolean).map(formatTime12).join(' – ');
       rows.push(['class time', `${dayStr} ${timeStr}`.trim()]);
     } else if(days.length > 0){
       rows.push(['class days', days.map(d => dayLabels[d]).join(', ')]);
     }
-    if(ci.classRoom) rows.push(['room', ci.classRoom]);
+    if(!ci.isAsync && ci.classRoom) rows.push(['room', ci.classRoom]);
     if(ci.officeHours) rows.push(['office hrs', ci.officeHours]);
 
     html += `<div class="modal-overlay" id="courseInfoViewOverlay">
@@ -289,6 +291,8 @@ export function renderCourseInfoCard(){
           <input type="text" id="courseProfInput" placeholder="name" value="${escapeHtml(ci.professor || '')}" style="flex:1;" />
           <input type="email" id="courseProfEmailInput" placeholder="email" value="${escapeHtml(ci.professorEmail || '')}" style="flex:1;" />
         </div>
+        <label class="feature-check" style="margin:10px 0 12px 0;"><input type="checkbox" id="courseAsyncCheck" ${ci.isAsync ? 'checked' : ''}/> this course is async — no fixed class time</label>
+        ${!ci.isAsync ? `
         <div class="info-field-label">class time</div>
         <div class="class-days-picker" style="margin-bottom:8px;">
           ${dayLabels.map((lbl, i) => `<span class="class-day-chip ${days.includes(i) ? 'active' : ''}" data-classday="${i}">${lbl}</span>`).join('')}
@@ -300,6 +304,7 @@ export function renderCourseInfoCard(){
         </div>
         <div class="info-field-label">room</div>
         <input type="text" id="courseRoomInput" placeholder="e.g. Rm 118" value="${escapeHtml(ci.classRoom || '')}" />
+        ` : ''}
         <div class="info-field-label">office hours</div>
         <input type="text" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" />
         <div class="modal-actions" style="margin-top:14px;">
@@ -388,15 +393,28 @@ export function attachChromeEvents(){
     render();
   });
 
+  const courseAsyncCheck = document.getElementById('courseAsyncCheck');
+  if(courseAsyncCheck) courseAsyncCheck.onchange = () => {
+    // preserve whatever's currently typed before re-rendering shows/hides fields
+    const profEl = document.getElementById('courseProfInput');
+    const emailEl = document.getElementById('courseProfEmailInput');
+    if(profEl) store.data.courseInfo.professor = profEl.value;
+    if(emailEl) store.data.courseInfo.professorEmail = emailEl.value;
+    store.data.courseInfo.isAsync = courseAsyncCheck.checked;
+    render();
+  };
+
   const courseInfoSaveBtn = document.getElementById('courseInfoSaveBtn');
   if(courseInfoSaveBtn) courseInfoSaveBtn.onclick = () => {
+    const isAsync = document.getElementById('courseAsyncCheck').checked;
     store.data.courseInfo = {
       professor: document.getElementById('courseProfInput').value.trim(),
       professorEmail: document.getElementById('courseProfEmailInput').value.trim(),
-      classDays: store.data.courseInfo.classDays || [],
-      classStart: document.getElementById('courseStartInput').value,
-      classEnd: document.getElementById('courseEndInput').value,
-      classRoom: document.getElementById('courseRoomInput').value.trim(),
+      isAsync,
+      classDays: isAsync ? [] : (store.data.courseInfo.classDays || []),
+      classStart: isAsync ? '' : document.getElementById('courseStartInput').value,
+      classEnd: isAsync ? '' : document.getElementById('courseEndInput').value,
+      classRoom: isAsync ? '' : document.getElementById('courseRoomInput').value.trim(),
       officeHours: document.getElementById('courseOfficeInput').value.trim()
     };
     ui.editingCourseInfo = false; ui.viewingCourseInfo = true;

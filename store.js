@@ -33,7 +33,8 @@ const BACKUP_SLOT_COUNT = 3;
 export const ALL_FEATURES = [
   { id: 'shopping', label: 'shopping list' },
   { id: 'todo', label: 'stuff to do' },
-  { id: 'info', label: 'info card' }
+  { id: 'info', label: 'info card' },
+  { id: 'course', label: 'course tracker (syllabus + assignments)' }
 ];
 
 // `store.data` holds the currently open space's board (categories, shopping
@@ -77,7 +78,10 @@ export function defaultState(name){
     info: { unitNumber: '', address: '', storageUnit: '', storageAddress: '', storageCode: '' },
     quickList: [],
     todoList: [],
-    infoCollapsed: false
+    infoCollapsed: false,
+    courseInfo: { professor: '', classTime: '', officeHours: '' },
+    courseInfoCollapsed: false,
+    categoryWeights: {}
   };
 }
 
@@ -91,6 +95,9 @@ export function normalizeState(){
   if(!store.data.quickList) store.data.quickList = [];
   if(!store.data.todoList) store.data.todoList = [];
   if(store.data.infoCollapsed === undefined) store.data.infoCollapsed = false;
+  if(!store.data.courseInfo) store.data.courseInfo = { professor: '', classTime: '', officeHours: '' };
+  if(store.data.courseInfoCollapsed === undefined) store.data.courseInfoCollapsed = false;
+  if(!store.data.categoryWeights) store.data.categoryWeights = {};
   if(store.data.bought.length > 0){
     let restoreCat = store.data.categories.find(c => c.name === 'previously completed');
     if(!restoreCat){
@@ -107,6 +114,38 @@ export function normalizeState(){
   if(ui.activeTab === 'quick' && !store.features.includes('shopping')) ui.activeTab = 'board';
   if(ui.activeTab === 'todo' && !store.features.includes('todo')) ui.activeTab = 'board';
 }
+
+// Weighted running grade from graded assignments only. Categories with no
+// graded items yet are excluded and the remaining weight is renormalized,
+// so an empty "exams" category doesn't drag the grade toward zero.
+export function computeRunningGrade(){
+  const weights = store.data.categoryWeights || {};
+  let weightedSum = 0, weightUsed = 0;
+  store.data.categories.forEach(cat => {
+    const w = Number(weights[cat.id]) || 0;
+    if(w <= 0) return;
+    const graded = (cat.items || []).filter(it => it.maxScore && it.score !== undefined && it.score !== null && it.score !== '');
+    if(graded.length === 0) return;
+    const earned = graded.reduce((s,it) => s + Number(it.score), 0);
+    const possible = graded.reduce((s,it) => s + Number(it.maxScore), 0);
+    if(possible <= 0) return;
+    weightedSum += (earned / possible) * w;
+    weightUsed += w;
+  });
+  if(weightUsed === 0) return null;
+  return (weightedSum / weightUsed) * 100;
+}
+
+// % of assignments (across all categories) marked completed.
+export function computeCourseProgress(){
+  let total = 0, done = 0;
+  store.data.categories.forEach(cat => {
+    (cat.items || []).forEach(it => { total++; if(it.completed) done++; });
+  });
+  if(total === 0) return { pct: 0, total: 0, done: 0 };
+  return { pct: (done / total) * 100, total, done };
+}
+
 
 
 let unsubscribeSpace = null;

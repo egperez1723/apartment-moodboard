@@ -4,7 +4,7 @@
 import { store, ui, loadData, goHome, renameSpace } from './store.js';
 import { escapeHtml } from './shared.js';
 import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, renderHomeScreen,
-  attachChromeEvents, attachHomeEvents } from './chrome.js';
+  renderCourseInfoCard, renderSyllabusCard, attachChromeEvents, attachHomeEvents } from './chrome.js';
 import { renderQuickList, renderTodoList, attachListsEvents } from './lists.js';
 import { renderMoodBoard, attachMoodboardEvents } from './moodboard.js';
 import { BACK_ICON } from './shared.js';
@@ -23,6 +23,7 @@ export function render(){
   const hasInfo = store.features.includes('info');
   const hasShopping = store.features.includes('shopping');
   const hasTodo = store.features.includes('todo');
+  const isCourse = store.features.includes('course');
 
   let html = `
     <header>
@@ -33,7 +34,10 @@ export function render(){
       <div class="subtitle">everything for this one, all in one place</div>
     </header>
   `;
-  if(hasInfo){
+  if(isCourse){
+    html += renderCourseInfoCard();
+    html += renderSyllabusCard();
+  } else if(hasInfo){
     html += renderCountdown();
     html += renderInfoCard();
     html += renderBudgetModal();

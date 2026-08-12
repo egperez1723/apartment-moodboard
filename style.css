@@ -196,6 +196,7 @@
   .cat-edit-toggle svg{ width:14px; height:14px; }
   .cat-del-icon{ width:22px; height:22px; border-radius:50%; background:var(--terracotta); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; flex-shrink:0; }
   .cat-edit-actions{ display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .cat-weight-input{ width:44px; font-family:'Work Sans', sans-serif; font-size:11px; padding:3px 5px; border:1.5px solid var(--line); border-radius:6px; background:var(--paper); text-align:center; }
   .cat-move-btn{ width:22px; height:22px; border-radius:50%; background:var(--paper); border:1.5px solid var(--line); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; flex-shrink:0; }
 
   .cards-grid{ column-count: 2; column-gap: 14px; padding-top: 16px; }
@@ -217,7 +218,9 @@
   .doodle{ width:16px; height:16px; flex-shrink:0; opacity:0.75; }
   .sub-badge{ font-size:10px; color:var(--ink-soft); background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:1px 7px; flex-shrink:0; }
   .card-price-tag{ font-size:10px; color:var(--sage-dark); background:rgba(143,164,120,0.15); border-radius:10px; padding:1px 7px; flex-shrink:0; font-weight:600; }
+  .card-due{ font-size:10px; color:var(--ink-soft); text-align:center; margin-top:2px; }
   .modal-price-input{ width:100%; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); margin:8px 0 4px 0; }
+  .course-field-row{ display:flex; gap:6px; align-items:center; }
   .card-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); }
   .expand-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--cream); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .item-done-btn{ width:32px; height:32px; border-radius:50%; background:var(--sage-dark); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
@@ -336,3 +339,20 @@
   .feature-check{ display:flex; align-items:center; gap:8px; font-family:'Work Sans', sans-serif; font-size:13px; color:var(--ink); cursor:pointer; }
   .feature-check input{ width:auto; margin:0; }
   .feature-check-group-footer{ max-width:220px; margin:10px auto 0 auto; }
+
+  /* course tracker: info card + syllabus card */
+  .course-info-card{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 16px; width:100%; box-shadow:2px 3px 0 rgba(74,63,49,0.08); }
+  .course-info-head{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+  .course-info-body{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .course-info-row{ display:flex; align-items:center; gap:8px; }
+  .course-info-input{ flex:1; font-family:'Work Sans', sans-serif; font-size:12px; padding:6px 9px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); }
+
+  .syllabus-card{ background:var(--paper); border:1px dashed var(--sage-dark); border-radius:14px; padding:14px 16px; margin-bottom:20px; }
+  .syllabus-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .syllabus-grade{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size:24px; color:var(--terracotta); }
+  .syllabus-progress-label{ font-size:10px; color:var(--ink-soft); margin-bottom:4px; }
+  .syllabus-progress-track{ height:8px; background:var(--cream); border-radius:4px; overflow:hidden; margin-bottom:10px; }
+  .syllabus-progress-fill{ height:100%; background:var(--sage-dark); border-radius:4px; }
+  .syllabus-chips{ display:flex; gap:8px; flex-wrap:wrap; }
+  .card-badges-row-chip{ font-size:10px; color:var(--ink-soft); background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:2px 8px; }
+  .syllabus-hint{ font-size:11px; color:var(--ink-soft); }

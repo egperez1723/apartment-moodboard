@@ -2,7 +2,7 @@
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
 import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
-  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature } from './store.js';
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, computeRunningGrade, computeCourseProgress } from './store.js';
 import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON } from './shared.js';
 import { render } from './app.js';
 
@@ -232,6 +232,46 @@ export function renderBudgetModal(){
 }
 
 
+export function renderCourseInfoCard(){
+  const ci = store.data.courseInfo || {};
+  const collapsed = store.data.courseInfoCollapsed;
+  return `<div class="quick-access-row" style="margin-bottom:8px;">
+    <div class="course-info-card">
+      <div class="course-info-head" id="courseInfoToggle">
+        <span class="hand" style="font-size:15px;">course info</span>
+        <span class="expand-btn" style="background:var(--cream);">${collapsed ? CHEVRON_DOWN() : CHEVRON_UP()}</span>
+      </div>
+      ${!collapsed ? `<div class="course-info-body">
+        <div class="course-info-row"><span class="index-card-label">professor</span><input type="text" class="course-info-input" id="courseProfInput" placeholder="name · email" value="${escapeHtml(ci.professor || '')}" /></div>
+        <div class="course-info-row"><span class="index-card-label">class time</span><input type="text" class="course-info-input" id="courseTimeInput" placeholder="e.g. MWF 10-10:50am, Rm 118" value="${escapeHtml(ci.classTime || '')}" /></div>
+        <div class="course-info-row"><span class="index-card-label">office hrs</span><input type="text" class="course-info-input" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" /></div>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+function CHEVRON_UP(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M18 15l-6-6-6 6"/></svg>`; }
+function CHEVRON_DOWN(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M6 9l6 6 6-6"/></svg>`; }
+
+export function renderSyllabusCard(){
+  const grade = computeRunningGrade();
+  const progress = computeCourseProgress();
+  const weights = store.data.categoryWeights || {};
+  const chips = store.data.categories
+    .filter(c => weights[c.id])
+    .map(c => `<span class="card-badges-row-chip">${escapeHtml(c.name)} ${weights[c.id]}%</span>`)
+    .join('');
+  return `<div class="syllabus-card">
+    <div class="syllabus-head">
+      <span class="hand" style="font-size:15px;">syllabus</span>
+      <span class="syllabus-grade">${grade === null ? '—' : grade.toFixed(1) + '%'}</span>
+    </div>
+    <div class="syllabus-progress-label">course ${progress.pct.toFixed(1)}% complete</div>
+    <div class="syllabus-progress-track"><div class="syllabus-progress-fill" style="width:${progress.pct}%;"></div></div>
+    ${chips ? `<div class="syllabus-chips">${chips}</div>` : `<div class="syllabus-hint">set category weights in edit mode (pencil above your categories)</div>`}
+  </div>`;
+}
+
+
 export function renderFooter(){
   const backup = getNewestLocalBackup();
   const backupAge = backup ? new Date(backup.when).toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : null;
@@ -254,6 +294,15 @@ export function renderFooter(){
 
 
 export function attachChromeEvents(){
+  const courseInfoToggle = document.getElementById('courseInfoToggle');
+  if(courseInfoToggle) courseInfoToggle.onclick = () => { store.data.courseInfoCollapsed = !store.data.courseInfoCollapsed; render(); saveData(); };
+  const courseProfInput = document.getElementById('courseProfInput');
+  if(courseProfInput) courseProfInput.addEventListener('blur', () => { store.data.courseInfo.professor = courseProfInput.value; saveData(); });
+  const courseTimeInput = document.getElementById('courseTimeInput');
+  if(courseTimeInput) courseTimeInput.addEventListener('blur', () => { store.data.courseInfo.classTime = courseTimeInput.value; saveData(); });
+  const courseOfficeInput = document.getElementById('courseOfficeInput');
+  if(courseOfficeInput) courseOfficeInput.addEventListener('blur', () => { store.data.courseInfo.officeHours = courseOfficeInput.value; saveData(); });
+
   const editDateLink = document.getElementById('editDateLink');
   if(editDateLink) editDateLink.onclick = () => { ui.editingDate = !ui.editingDate; render(); };
   const saveDateBtn = document.getElementById('saveDateBtn');

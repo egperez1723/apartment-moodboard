@@ -64,7 +64,9 @@ export function renderMoodBoard(){
           </div>
           <span class="cat-mood-toggle ${inMoodView?'active':''}" data-moodview="${cat.id}" title="mood board view">${IMAGE_ICON}</span>
         </div>
-        ${ui.catEditMode ? `<div class="cat-edit-actions"><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
+        ${ui.catEditMode ? `<div class="cat-edit-actions">
+          ${store.features.includes('course') ? `<input type="number" class="cat-weight-input" inputmode="numeric" placeholder="wt %" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" data-catweight="${cat.id}" />` : ''}
+          <span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
       </div>`;
 
     if(inMoodView){
@@ -98,24 +100,37 @@ export function renderMoodBoard(){
       </div>`;
     }
 
-    const sortedItems = [...items].sort((a,b) => (a.completed?1:0) - (b.completed?1:0));
+    const isCourse = store.features.includes('course');
+    const sortedItems = [...items].sort((a,b) => {
+      if((a.completed?1:0) !== (b.completed?1:0)) return (a.completed?1:0) - (b.completed?1:0);
+      if(isCourse){
+        const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const bd = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        return ad - bd;
+      }
+      return 0;
+    });
     sortedItems.forEach(it => {
       const subs = it.subitems || [];
       const doneCount = subs.filter(s=>s.done).length;
       const subsWithPrice = subs.filter(s => s.price);
       const cardDisplayPrice = subsWithPrice.length > 0 ? subsWithPrice.reduce((sum,s)=>sum+Number(s.price),0) : (it.price || 0);
+      const hasScore = it.maxScore && it.score !== undefined && it.score !== null && it.score !== '';
+      const dueLabel = it.dueDate ? new Date(it.dueDate + 'T00:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '';
       html += `<div class="card ${it.completed?'completed':''}" data-cardopen="${it.id}" draggable="true" data-dragitem="${it.id}" data-dragcat="${cat.id}">
         <div class="washi" style="background:${cColor};"></div>
         ${(it.images.length + it.links.length) > 3 ? `<div class="washi2" style="background:${catColor(catIndex+1)};"></div>` : ''}
         ${it.completed ? `<div class="completed-overlay" style="background:${cColor};"></div><div class="completed-badge" style="background:${cColor};">${CHECK_ICON}</div>` : ''}
         <div class="card-top">
           <div class="card-title-static">${escapeHtml(it.title)}</div>
-          ${(it.notes || subs.length > 0 || cardDisplayPrice || ui.catEditMode) ? `<div class="card-badges-row">
+          ${(it.notes || subs.length > 0 || (!isCourse && cardDisplayPrice) || (isCourse && hasScore) || ui.catEditMode) ? `<div class="card-badges-row">
             ${it.notes ? `<span class="note-indicator" title="has a note">${NOTE_ICON}</span>` : ''}
             ${subs.length > 0 ? `<span class="sub-badge">${doneCount}/${subs.length}</span>` : ''}
-            ${cardDisplayPrice ? `<span class="card-price-tag">$${cardDisplayPrice.toFixed(2)}</span>` : ''}
+            ${!isCourse && cardDisplayPrice ? `<span class="card-price-tag">$${cardDisplayPrice.toFixed(2)}</span>` : ''}
+            ${isCourse && hasScore ? `<span class="card-price-tag">${it.score}/${it.maxScore}</span>` : ''}
             ${ui.catEditMode ? `<span class="card-del" data-carddel="${it.id}" data-cat="${cat.id}">✕</span>` : ''}
           </div>` : ''}
+          ${isCourse && dueLabel ? `<div class="card-due">due ${dueLabel}</div>` : ''}
         </div>
 
         ${(it.images||[]).length > 0 ? `<div class="img-grid ${(it.images.length===1?'n1':(it.images.length===3?'n3':(it.images.length===2?'n2':'nmany')))}">
@@ -131,7 +146,7 @@ export function renderMoodBoard(){
         </div>` : ''}
 
         <div class="card-footer">
-          <button class="move-bought-btn" data-togglecompleted="${it.id}" data-cat="${cat.id}">${it.completed ? 'mark active' : 'completed'}</button>
+          <button class="move-bought-btn" data-togglecompleted="${it.id}" data-cat="${cat.id}">${it.completed ? (isCourse ? 'mark not done' : 'mark active') : (isCourse ? 'mark done' : 'completed')}</button>
           <span class="expand-btn" data-expandtoggle="${it.id}">${EXPAND_ICON}</span>
         </div>
       </div>`;
@@ -158,7 +173,13 @@ export function renderMoodBoard(){
             <div class="card-title" contenteditable="true" data-itemtitle="${openItem.id}" data-cat="${openCat.id}" style="font-size:19px; text-align:left; flex:1;">${escapeHtml(openItem.title)}</div>
             <span class="item-done-btn" id="itemViewClose" style="margin-left:8px; background:${openCColor};">${CHECK_ICON}</span>
           </div>
-          <input type="text" inputmode="decimal" class="modal-price-input" id="itemViewPriceInput" placeholder="price (optional)" maxlength="10" value="${openItem.price ? openItem.price : ''}" data-item="${openItem.id}" data-cat="${openCat.id}" />
+          <input type="text" inputmode="decimal" class="modal-price-input" id="itemViewPriceInput" placeholder="price (optional)" maxlength="10" value="${openItem.price ? openItem.price : ''}" data-item="${openItem.id}" data-cat="${openCat.id}" style="${store.features.includes('course') ? 'display:none;' : ''}" />
+          ${store.features.includes('course') ? `<div class="course-field-row">
+            <input type="date" class="modal-price-input" id="itemViewDueInput" value="${openItem.dueDate || ''}" data-item="${openItem.id}" data-cat="${openCat.id}" style="flex:1;" />
+            <input type="number" inputmode="numeric" class="modal-price-input" id="itemViewScoreInput" placeholder="score" maxlength="6" value="${openItem.score !== undefined && openItem.score !== null ? openItem.score : ''}" data-item="${openItem.id}" data-cat="${openCat.id}" style="width:70px;" />
+            <span style="align-self:center; color:var(--ink-soft); font-size:13px;">/</span>
+            <input type="number" inputmode="numeric" class="modal-price-input" id="itemViewMaxScoreInput" placeholder="out of" maxlength="6" value="${openItem.maxScore !== undefined && openItem.maxScore !== null ? openItem.maxScore : ''}" data-item="${openItem.id}" data-cat="${openCat.id}" style="width:70px;" />
+          </div>` : ''}
 
           <div class="modal-section-label">sub-items</div>
           ${subs.length > 0 ? `<ul class="subitems">
@@ -214,8 +235,15 @@ export function renderMoodBoard(){
       <div class="modal-box modal-box-lg">
         <div class="modal-closerow"><span class="expand-btn" id="itemCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">New item${cat ? ` in ${escapeHtml(cat.name)}` : ''}</div>
-        <input type="text" id="itemTitleInput" placeholder="e.g. Bedding" maxlength="40" value="${escapeHtml(ui.itemDraft.title)}" />
-        <input type="text" inputmode="decimal" id="itemPriceInput" placeholder="price (optional) — e.g. 24.99" maxlength="10" value="${escapeHtml(ui.itemDraft.price || '')}" />
+        <input type="text" id="itemTitleInput" placeholder="${store.features.includes('course') ? 'e.g. Problem set 4' : 'e.g. Bedding'}" maxlength="40" value="${escapeHtml(ui.itemDraft.title)}" />
+        ${store.features.includes('course')
+          ? `<div class="course-field-row">
+              <input type="date" id="itemDueInput" value="${ui.itemDraft.dueDate || ''}" style="flex:1;" />
+              <input type="number" inputmode="numeric" id="itemScoreInput" placeholder="score" maxlength="6" value="${ui.itemDraft.score || ''}" style="width:70px;" />
+              <span style="align-self:center; color:var(--ink-soft); font-size:13px;">/</span>
+              <input type="number" inputmode="numeric" id="itemMaxScoreInput" placeholder="out of" maxlength="6" value="${ui.itemDraft.maxScore || ''}" style="width:70px;" />
+            </div>`
+          : `<input type="text" inputmode="decimal" id="itemPriceInput" placeholder="price (optional) — e.g. 24.99" maxlength="10" value="${escapeHtml(ui.itemDraft.price || '')}" />`}
 
         <div class="modal-section-label">sub-items</div>
         ${ui.itemDraft.subitems.length > 0 ? `<ul class="subitems">
@@ -311,9 +339,15 @@ export function attachMoodboardEvents(){
     const t = document.getElementById('itemTitleInput');
     const n = document.getElementById('itemNotesInput');
     const p = document.getElementById('itemPriceInput');
+    const due = document.getElementById('itemDueInput');
+    const sc = document.getElementById('itemScoreInput');
+    const msc = document.getElementById('itemMaxScoreInput');
     if(t) ui.itemDraft.title = t.value;
     if(n) ui.itemDraft.notes = n.value;
     if(p) ui.itemDraft.price = p.value;
+    if(due) ui.itemDraft.dueDate = due.value;
+    if(sc) ui.itemDraft.score = sc.value;
+    if(msc) ui.itemDraft.maxScore = msc.value;
   }
 
   const itemModalOverlay = document.getElementById('itemModalOverlay');
@@ -328,11 +362,16 @@ export function attachMoodboardEvents(){
     const cat = store.data.categories.find(c => c.id === ui.addingItemCat);
     if(cat){
       const priceVal = (ui.itemDraft.price || '').trim();
+      const scoreVal = (ui.itemDraft.score || '').toString().trim();
+      const maxScoreVal = (ui.itemDraft.maxScore || '').toString().trim();
       cat.items.push({
         id: uid(),
         title: ui.itemDraft.title.trim() || 'New item',
         notes: ui.itemDraft.notes.trim(),
         price: priceVal ? (parseFloat(priceVal) || 0) : 0,
+        dueDate: ui.itemDraft.dueDate || null,
+        score: scoreVal ? Number(scoreVal) : null,
+        maxScore: maxScoreVal ? Number(maxScoreVal) : null,
         subitems: ui.itemDraft.subitems,
         links: ui.itemDraft.links,
         images: ui.itemDraft.images
@@ -432,9 +471,40 @@ export function attachMoodboardEvents(){
     });
   }
 
+  const itemViewDueInput = document.getElementById('itemViewDueInput');
+  if(itemViewDueInput){
+    itemViewDueInput.addEventListener('change', () => {
+      const {item} = findGroup(itemViewDueInput.getAttribute('data-cat'), itemViewDueInput.getAttribute('data-item'));
+      if(item){ item.dueDate = itemViewDueInput.value || null; saveData(); }
+    });
+  }
+  const itemViewScoreInput = document.getElementById('itemViewScoreInput');
+  const itemViewMaxScoreInput = document.getElementById('itemViewMaxScoreInput');
+  if(itemViewScoreInput){
+    itemViewScoreInput.addEventListener('blur', () => {
+      const {item} = findGroup(itemViewScoreInput.getAttribute('data-cat'), itemViewScoreInput.getAttribute('data-item'));
+      if(item){ const v = itemViewScoreInput.value.trim(); item.score = v ? Number(v) : null; saveData(); }
+    });
+  }
+  if(itemViewMaxScoreInput){
+    itemViewMaxScoreInput.addEventListener('blur', () => {
+      const {item} = findGroup(itemViewMaxScoreInput.getAttribute('data-cat'), itemViewMaxScoreInput.getAttribute('data-item'));
+      if(item){ const v = itemViewMaxScoreInput.value.trim(); item.maxScore = v ? Number(v) : null; saveData(); }
+    });
+  }
+
+
 
   const catEditToggle = document.getElementById('catEditToggle');
   if(catEditToggle) catEditToggle.onclick = () => { ui.catEditMode = !ui.catEditMode; render(); };
+
+  document.querySelectorAll('[data-catweight]').forEach(el => el.addEventListener('blur', () => {
+    const catId = el.getAttribute('data-catweight');
+    const val = el.value.trim();
+    if(val){ store.data.categoryWeights[catId] = Number(val); }
+    else { delete store.data.categoryWeights[catId]; }
+    saveData();
+  }));
 
   document.querySelectorAll('[data-catmove]').forEach(el => el.onclick = () => {
     const catId = el.getAttribute('data-catmove');
@@ -462,7 +532,7 @@ export function attachMoodboardEvents(){
 
   function startAddItem(catId){
     ui.addingItemCat = catId;
-    ui.itemDraft = {title:'', notes:'', price:'', subitems:[], links:[], images:[]};
+    ui.itemDraft = {title:'', notes:'', price:'', dueDate:'', score:'', maxScore:'', subitems:[], links:[], images:[]};
     ui.modalAddingSub = false;
     ui.modalAddingLink = false;
     ui.catQuickAddOpen = null;

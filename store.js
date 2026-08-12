@@ -79,7 +79,7 @@ export function defaultState(name){
     quickList: [],
     todoList: [],
     infoCollapsed: false,
-    courseInfo: { professor: '', classTime: '', officeHours: '' },
+    courseInfo: { professor: '', professorEmail: '', classDays: [], classStart: '', classEnd: '', classRoom: '', officeHours: '' },
     courseInfoCollapsed: false,
     categoryWeights: {}
   };
@@ -95,7 +95,12 @@ export function normalizeState(){
   if(!store.data.quickList) store.data.quickList = [];
   if(!store.data.todoList) store.data.todoList = [];
   if(store.data.infoCollapsed === undefined) store.data.infoCollapsed = false;
-  if(!store.data.courseInfo) store.data.courseInfo = { professor: '', classTime: '', officeHours: '' };
+  if(!store.data.courseInfo) store.data.courseInfo = { professor: '', professorEmail: '', classDays: [], classStart: '', classEnd: '', classRoom: '', officeHours: '' };
+  if(store.data.courseInfo.professorEmail === undefined) store.data.courseInfo.professorEmail = '';
+  if(!store.data.courseInfo.classDays) store.data.courseInfo.classDays = [];
+  if(store.data.courseInfo.classStart === undefined) store.data.courseInfo.classStart = '';
+  if(store.data.courseInfo.classEnd === undefined) store.data.courseInfo.classEnd = '';
+  if(store.data.courseInfo.classRoom === undefined) store.data.courseInfo.classRoom = '';
   if(store.data.courseInfoCollapsed === undefined) store.data.courseInfoCollapsed = false;
   if(!store.data.categoryWeights) store.data.categoryWeights = {};
   if(store.data.bought.length > 0){

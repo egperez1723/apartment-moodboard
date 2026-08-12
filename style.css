@@ -346,6 +346,9 @@
   .course-info-body{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
   .course-info-row{ display:flex; align-items:center; gap:8px; }
   .course-info-input{ flex:1; font-family:'Work Sans', sans-serif; font-size:12px; padding:6px 9px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); }
+  .class-days-picker{ display:flex; gap:5px; flex:1; }
+  .class-day-chip{ width:26px; height:26px; border-radius:50%; background:var(--cream); border:1.5px solid var(--line); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; cursor:pointer; flex-shrink:0; }
+  .class-day-chip.active{ background:var(--sage); border-color:var(--sage-dark); color:var(--ink); }
 
   .syllabus-card{ background:var(--paper); border:1px dashed var(--sage-dark); border-radius:14px; padding:14px 16px; margin-bottom:20px; }
   .syllabus-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }

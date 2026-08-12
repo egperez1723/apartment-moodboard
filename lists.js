@@ -48,7 +48,7 @@ export function renderTodoList(){
   const list = store.data.todoList || [];
   let html = `<div class="todo-section">
     <div class="todo-title">stuff to do</div>
-    <div class="todo-subtitle">logistics and tasks, not things to buy</div>`;
+    <div class="todo-subtitle">tasks to take care of</div>`;
 
   if(list.length > 0){
     html += `<ul class="todo-list">

@@ -49,6 +49,7 @@ export const ui = {
   openItemId: null,
   addingCategory: false,
   catEditMode: false,
+  editingCatId: null,
   moodViewCats: new Set(),
   catQuickAddOpen: null,
   budgetModalOpen: false,
@@ -151,6 +152,18 @@ export function computeCourseProgress(){
   });
   if(total === 0) return { pct: 0, total: 0, done: 0 };
   return { pct: (done / total) * 100, total, done };
+}
+
+// Nearest not-yet-done assignment with a due date, across all categories.
+export function computeNextDue(){
+  let next = null;
+  store.data.categories.forEach(cat => {
+    (cat.items || []).forEach(it => {
+      if(it.completed || !it.dueDate) return;
+      if(!next || it.dueDate < next.dueDate) next = it;
+    });
+  });
+  return next;
 }
 
 

@@ -36,6 +36,30 @@ export function renderMoodBoard(){
     </div>`;
   }
 
+  if(ui.editingCatId !== null){
+    const cat = store.data.categories.find(c => c.id === ui.editingCatId);
+    if(cat){
+      const isCourse = store.features.includes('course');
+      html += `<div class="modal-overlay" id="catEditModalOverlay">
+        <div class="modal-box">
+          <div class="modal-closerow"><span class="expand-btn" id="catEditCloseBtn">${COLLAPSE_ICON}</span></div>
+          <div class="modal-title">Edit category</div>
+          <input type="text" id="catEditNameInput" value="${escapeHtml(cat.name)}" maxlength="30" />
+          ${isCourse ? `<div class="info-field-label">weight %</div><input type="number" inputmode="numeric" id="catEditWeightInput" placeholder="e.g. 20" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />` : ''}
+          <div class="cat-edit-popup-actions">
+            <span class="cat-move-btn" id="catEditMoveUp" title="move up">↑</span>
+            <span class="cat-move-btn" id="catEditMoveDown" title="move down">↓</span>
+            <span class="cat-edit-delete" id="catEditDeleteBtn">✕ delete category</span>
+          </div>
+          <div class="modal-actions">
+            <button class="modal-cancel" id="catEditCancelBtn">cancel</button>
+            <button class="modal-add" id="catEditSaveBtn">save</button>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
   if(store.data.categories.length === 0){
     html += `<div class="empty-hint">the board's empty — add a category above to start pinning things</div>`;
   } else {
@@ -52,7 +76,7 @@ export function renderMoodBoard(){
     html += `<div class="board-cat">
       <div class="cat-header">
         <span class="cat-dot" style="background:${cColor};"></span>
-        <div class="cat-name hand" contenteditable="true" data-catname="${cat.id}" style="border-bottom-color:${cColor};">${escapeHtml(cat.name)}</div>
+        <div class="cat-name hand" data-catopenedit="${cat.id}" style="border-bottom-color:${cColor}; cursor:pointer;">${escapeHtml(cat.name)}</div>
         <div class="cat-meta">${items.length} item${items.length===1?'':'s'}</div>
         <div class="cat-icon-group">
           <div class="cat-quick-add">
@@ -64,9 +88,6 @@ export function renderMoodBoard(){
           </div>
           <span class="cat-mood-toggle ${inMoodView?'active':''}" data-moodview="${cat.id}" title="mood board view">${IMAGE_ICON}</span>
         </div>
-        ${ui.catEditMode ? `<div class="cat-edit-actions">
-          ${store.features.includes('course') ? `<input type="number" class="cat-weight-input" inputmode="numeric" placeholder="wt %" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" data-catweight="${cat.id}" />` : ''}
-          <span class="cat-move-btn" data-catmove="${cat.id}" data-dir="up">↑</span><span class="cat-move-btn" data-catmove="${cat.id}" data-dir="down">↓</span><span class="cat-del-icon" data-catdel="${cat.id}">✕</span></div>` : ''}
       </div>`;
 
     if(inMoodView){
@@ -498,37 +519,59 @@ export function attachMoodboardEvents(){
   const catEditToggle = document.getElementById('catEditToggle');
   if(catEditToggle) catEditToggle.onclick = () => { ui.catEditMode = !ui.catEditMode; render(); };
 
-  document.querySelectorAll('[data-catweight]').forEach(el => el.addEventListener('blur', () => {
-    const catId = el.getAttribute('data-catweight');
-    const val = el.value.trim();
-    if(val){ store.data.categoryWeights[catId] = Number(val); }
-    else { delete store.data.categoryWeights[catId]; }
-    saveData();
-  }));
+  document.querySelectorAll('[data-catopenedit]').forEach(el => el.onclick = () => {
+    ui.editingCatId = el.getAttribute('data-catopenedit');
+    render();
+  });
 
-  document.querySelectorAll('[data-catmove]').forEach(el => el.onclick = () => {
-    const catId = el.getAttribute('data-catmove');
-    const dir = el.getAttribute('data-dir');
-    const idx = store.data.categories.findIndex(c => c.id === catId);
+  const catEditModalOverlay = document.getElementById('catEditModalOverlay');
+  if(catEditModalOverlay) catEditModalOverlay.addEventListener('click', (e) => { if(e.target === catEditModalOverlay){ ui.editingCatId = null; render(); } });
+  const catEditCloseBtn = document.getElementById('catEditCloseBtn');
+  if(catEditCloseBtn) catEditCloseBtn.onclick = () => { ui.editingCatId = null; render(); };
+  const catEditCancelBtn = document.getElementById('catEditCancelBtn');
+  if(catEditCancelBtn) catEditCancelBtn.onclick = () => { ui.editingCatId = null; render(); };
+
+  const catEditNameInput = document.getElementById('catEditNameInput');
+  if(catEditNameInput){ catEditNameInput.focus(); catEditNameInput.select(); }
+
+  const catEditMoveUp = document.getElementById('catEditMoveUp');
+  const catEditMoveDown = document.getElementById('catEditMoveDown');
+  function moveCat(dir){
+    const idx = store.data.categories.findIndex(c => c.id === ui.editingCatId);
     const swapWith = dir === 'up' ? idx - 1 : idx + 1;
     if(idx === -1 || swapWith < 0 || swapWith >= store.data.categories.length) return;
     [store.data.categories[idx], store.data.categories[swapWith]] = [store.data.categories[swapWith], store.data.categories[idx]];
     render(); saveData();
-  });
+  }
+  if(catEditMoveUp) catEditMoveUp.onclick = () => moveCat('up');
+  if(catEditMoveDown) catEditMoveDown.onclick = () => moveCat('down');
 
-  document.querySelectorAll('[data-catdel]').forEach(el => el.onclick = () => {
+  const catEditDeleteBtn = document.getElementById('catEditDeleteBtn');
+  if(catEditDeleteBtn) catEditDeleteBtn.onclick = () => {
     if(!confirm('Remove this whole category and its items?')) return;
-    store.data.categories = store.data.categories.filter(c => c.id !== el.getAttribute('data-catdel'));
+    store.data.categories = store.data.categories.filter(c => c.id !== ui.editingCatId);
+    delete store.data.categoryWeights[ui.editingCatId];
+    ui.editingCatId = null;
     render(); saveData();
-  });
+  };
 
-  document.querySelectorAll('[data-catname]').forEach(el => {
-    el.addEventListener('blur', () => {
-      const cat = store.data.categories.find(c => c.id === el.getAttribute('data-catname'));
-      if(cat){ cat.name = el.innerText.trim() || cat.name; saveData(); }
-    });
-    el.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); el.blur(); } });
-  });
+  const catEditSaveBtn = document.getElementById('catEditSaveBtn');
+  if(catEditSaveBtn) catEditSaveBtn.onclick = () => {
+    const cat = store.data.categories.find(c => c.id === ui.editingCatId);
+    if(cat){
+      const nameInput = document.getElementById('catEditNameInput');
+      const name = nameInput.value.trim();
+      if(name) cat.name = name;
+      const weightInput = document.getElementById('catEditWeightInput');
+      if(weightInput){
+        const val = weightInput.value.trim();
+        if(val) store.data.categoryWeights[cat.id] = Number(val);
+        else delete store.data.categoryWeights[cat.id];
+      }
+    }
+    ui.editingCatId = null;
+    render(); saveData();
+  };
 
   function startAddItem(catId){
     ui.addingItemCat = catId;

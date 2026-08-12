@@ -2,7 +2,7 @@
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
 import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
-  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, computeRunningGrade, computeCourseProgress } from './store.js';
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, computeRunningGrade, computeCourseProgress, computeNextDue } from './store.js';
 import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON } from './shared.js';
 import { render } from './app.js';
 
@@ -237,8 +237,16 @@ export function renderCourseInfoCard(){
   const dayLabels = ['Su','M','Tu','W','Th','F','Sa'];
   const days = ci.classDays || [];
 
+  const next = computeNextDue();
+  let nextDueBadge = '';
+  if(next){
+    const dueLabel = new Date(next.dueDate + 'T00:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
+    nextDueBadge = `<span class="next-due-badge" data-cardopen="${next.id}">next due: ${escapeHtml(next.title)} · ${dueLabel}</span>`;
+  }
+
   let html = `<div class="quick-access-row">
     <span class="quick-access-btn" id="courseInfoOpenBtn">${CARD_ICON} course info</span>
+    ${nextDueBadge}
   </div>`;
 
   if(ui.viewingCourseInfo){

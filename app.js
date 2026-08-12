@@ -43,7 +43,7 @@ export function render(){
     html += renderBudgetModal();
   }
 
-  const tabs = [{id:'board', label: isCourse ? 'assignments' : 'mood board'}];
+  const tabs = [{id:'board', label: isCourse ? 'course board' : 'mood board'}];
   if(hasShopping) tabs.push({id:'quick', label:'shopping list'});
   if(hasTodo) tabs.push({id:'todo', label:'stuff to do'});
 

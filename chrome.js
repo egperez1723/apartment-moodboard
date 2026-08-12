@@ -234,42 +234,82 @@ export function renderBudgetModal(){
 
 export function renderCourseInfoCard(){
   const ci = store.data.courseInfo || {};
-  const collapsed = store.data.courseInfoCollapsed;
-  const days = ci.classDays || [];
   const dayLabels = ['Su','M','Tu','W','Th','F','Sa'];
-  return `<div class="quick-access-row" style="margin-bottom:8px;">
-    <div class="course-info-card">
-      <div class="course-info-head" id="courseInfoToggle">
-        <span class="hand" style="font-size:15px;">course info</span>
-        <span class="expand-btn" style="background:var(--cream);">${collapsed ? CHEVRON_DOWN() : CHEVRON_UP()}</span>
-      </div>
-      ${!collapsed ? `<div class="course-info-body">
-        <div class="course-info-row">
-          <span class="index-card-label" style="min-width:60px;">professor</span>
-          <input type="text" class="course-info-input" id="courseProfInput" placeholder="name" value="${escapeHtml(ci.professor || '')}" style="flex:1;" />
-          <input type="email" class="course-info-input" id="courseProfEmailInput" placeholder="email" value="${escapeHtml(ci.professorEmail || '')}" style="flex:1;" />
-          ${ci.professorEmail ? `<span class="info-copy-btn" data-copyval="${escapeHtml(ci.professorEmail)}" title="copy email">${COPY_ICON}</span>` : ''}
-        </div>
-        <div class="course-info-row">
-          <span class="index-card-label" style="min-width:60px;">class time</span>
-          <div class="class-days-picker">
-            ${dayLabels.map((lbl, i) => `<span class="class-day-chip ${days.includes(i) ? 'active' : ''}" data-classday="${i}">${lbl}</span>`).join('')}
+  const days = ci.classDays || [];
+
+  let html = `<div class="quick-access-row">
+    <span class="quick-access-btn" id="courseInfoOpenBtn">${CARD_ICON} course info</span>
+  </div>`;
+
+  if(ui.viewingCourseInfo){
+    const rows = [];
+    if(ci.professor) rows.push(['professor', ci.professor]);
+    if(ci.professorEmail) rows.push(['email', ci.professorEmail]);
+    if(days.length > 0 && (ci.classStart || ci.classEnd)){
+      const dayStr = days.map(d => dayLabels[d]).join('');
+      const timeStr = [ci.classStart, ci.classEnd].filter(Boolean).map(formatTime12).join(' – ');
+      rows.push(['class time', `${dayStr} ${timeStr}`.trim()]);
+    } else if(days.length > 0){
+      rows.push(['class days', days.map(d => dayLabels[d]).join(', ')]);
+    }
+    if(ci.classRoom) rows.push(['room', ci.classRoom]);
+    if(ci.officeHours) rows.push(['office hrs', ci.officeHours]);
+
+    html += `<div class="modal-overlay" id="courseInfoViewOverlay">
+      <div class="modal-box" style="padding:0; max-width:300px; background:transparent; box-shadow:none;">
+        <div class="modal-closerow"><span class="expand-btn" id="courseInfoViewCloseBtn" style="background:var(--paper);">${COLLAPSE_ICON}</span></div>
+        <div class="index-card">
+          <div class="index-card-band">
+            <span>course info</span>
+            <span class="index-card-editbtn" id="courseInfoEditFromViewBtn">${PENCIL_ICON}</span>
+          </div>
+          <div class="index-card-body">
+            ${rows.length === 0 ? `<div class="info-empty">nothing added yet — tap the pencil to fill it in</div>` : rows.map(([label,val]) => `<div class="index-card-row"><span class="index-card-label">${escapeHtml(label)}</span><span class="index-card-value">${escapeHtml(val)}${label==='email' ? ` <span class="info-copy-btn" data-copyval="${escapeHtml(val)}" title="copy email" style="display:inline-flex; vertical-align:middle; margin-left:4px;">${COPY_ICON}</span>` : ''}</span></div>`).join('')}
           </div>
         </div>
+      </div>
+    </div>`;
+  }
+
+  if(ui.editingCourseInfo){
+    html += `<div class="modal-overlay" id="courseInfoModalOverlay">
+      <div class="modal-box modal-box-lg info-modal">
+        <div class="modal-closerow"><span class="expand-btn" id="courseInfoEditCloseBtn">${COLLAPSE_ICON}</span></div>
+        <div class="modal-title">course info</div>
+        <div class="info-field-label">professor</div>
         <div class="course-info-row">
-          <span class="index-card-label" style="min-width:60px;"></span>
-          <input type="time" class="course-info-input" id="courseStartInput" value="${ci.classStart || ''}" style="flex:1;" />
+          <input type="text" id="courseProfInput" placeholder="name" value="${escapeHtml(ci.professor || '')}" style="flex:1;" />
+          <input type="email" id="courseProfEmailInput" placeholder="email" value="${escapeHtml(ci.professorEmail || '')}" style="flex:1;" />
+        </div>
+        <div class="info-field-label">class time</div>
+        <div class="class-days-picker" style="margin-bottom:8px;">
+          ${dayLabels.map((lbl, i) => `<span class="class-day-chip ${days.includes(i) ? 'active' : ''}" data-classday="${i}">${lbl}</span>`).join('')}
+        </div>
+        <div class="course-info-row">
+          <input type="time" id="courseStartInput" value="${ci.classStart || ''}" style="flex:1;" />
           <span style="color:var(--ink-soft); font-size:12px;">to</span>
-          <input type="time" class="course-info-input" id="courseEndInput" value="${ci.classEnd || ''}" style="flex:1;" />
+          <input type="time" id="courseEndInput" value="${ci.classEnd || ''}" style="flex:1;" />
         </div>
-        <div class="course-info-row">
-          <span class="index-card-label" style="min-width:60px;">room</span>
-          <input type="text" class="course-info-input" id="courseRoomInput" placeholder="e.g. Rm 118" value="${escapeHtml(ci.classRoom || '')}" style="flex:1;" />
+        <div class="info-field-label">room</div>
+        <input type="text" id="courseRoomInput" placeholder="e.g. Rm 118" value="${escapeHtml(ci.classRoom || '')}" />
+        <div class="info-field-label">office hours</div>
+        <input type="text" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" />
+        <div class="modal-actions" style="margin-top:14px;">
+          <button class="modal-cancel" id="courseInfoCancelBtn">cancel</button>
+          <button class="modal-add" id="courseInfoSaveBtn">save</button>
         </div>
-        <div class="course-info-row"><span class="index-card-label" style="min-width:60px;">office hrs</span><input type="text" class="course-info-input" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" style="flex:1;" /></div>
-      </div>` : ''}
-    </div>
-  </div>`;
+      </div>
+    </div>`;
+  }
+
+  return html;
+}
+function formatTime12(t){
+  if(!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2,'0')}${ampm}`;
 }
 function CHEVRON_UP(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M18 15l-6-6-6 6"/></svg>`; }
 function CHEVRON_DOWN(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M6 9l6 6 6-6"/></svg>`; }
@@ -316,26 +356,44 @@ export function renderFooter(){
 
 
 export function attachChromeEvents(){
-  const courseInfoToggle = document.getElementById('courseInfoToggle');
-  if(courseInfoToggle) courseInfoToggle.onclick = () => { store.data.courseInfoCollapsed = !store.data.courseInfoCollapsed; render(); saveData(); };
-  const courseProfInput = document.getElementById('courseProfInput');
-  if(courseProfInput) courseProfInput.addEventListener('blur', () => { store.data.courseInfo.professor = courseProfInput.value; saveData(); });
-  const courseProfEmailInput = document.getElementById('courseProfEmailInput');
-  if(courseProfEmailInput) courseProfEmailInput.addEventListener('blur', () => { store.data.courseInfo.professorEmail = courseProfEmailInput.value.trim(); render(); saveData(); });
+  const courseInfoOpenBtn = document.getElementById('courseInfoOpenBtn');
+  if(courseInfoOpenBtn) courseInfoOpenBtn.onclick = () => { ui.viewingCourseInfo = true; render(); };
+
+  const courseInfoViewOverlay = document.getElementById('courseInfoViewOverlay');
+  if(courseInfoViewOverlay) courseInfoViewOverlay.addEventListener('click', (e) => { if(e.target === courseInfoViewOverlay){ ui.viewingCourseInfo = false; render(); } });
+  const courseInfoViewCloseBtn = document.getElementById('courseInfoViewCloseBtn');
+  if(courseInfoViewCloseBtn) courseInfoViewCloseBtn.onclick = () => { ui.viewingCourseInfo = false; render(); };
+  const courseInfoEditFromViewBtn = document.getElementById('courseInfoEditFromViewBtn');
+  if(courseInfoEditFromViewBtn) courseInfoEditFromViewBtn.onclick = () => { ui.viewingCourseInfo = false; ui.editingCourseInfo = true; render(); };
+
+  const courseInfoModalOverlay = document.getElementById('courseInfoModalOverlay');
+  if(courseInfoModalOverlay) courseInfoModalOverlay.addEventListener('click', (e) => { if(e.target === courseInfoModalOverlay){ ui.editingCourseInfo = false; ui.viewingCourseInfo = true; render(); } });
+  const courseInfoCancelBtn = document.getElementById('courseInfoCancelBtn');
+  if(courseInfoCancelBtn) courseInfoCancelBtn.onclick = () => { ui.editingCourseInfo = false; ui.viewingCourseInfo = true; render(); };
+  const courseInfoEditCloseBtn = document.getElementById('courseInfoEditCloseBtn');
+  if(courseInfoEditCloseBtn) courseInfoEditCloseBtn.onclick = () => { ui.editingCourseInfo = false; ui.viewingCourseInfo = true; render(); };
+
   document.querySelectorAll('[data-classday]').forEach(el => el.onclick = () => {
     const day = Number(el.getAttribute('data-classday'));
     const days = store.data.courseInfo.classDays || [];
     store.data.courseInfo.classDays = days.includes(day) ? days.filter(d => d !== day) : [...days, day].sort();
-    render(); saveData();
+    render();
   });
-  const courseStartInput = document.getElementById('courseStartInput');
-  if(courseStartInput) courseStartInput.addEventListener('change', () => { store.data.courseInfo.classStart = courseStartInput.value; saveData(); });
-  const courseEndInput = document.getElementById('courseEndInput');
-  if(courseEndInput) courseEndInput.addEventListener('change', () => { store.data.courseInfo.classEnd = courseEndInput.value; saveData(); });
-  const courseRoomInput = document.getElementById('courseRoomInput');
-  if(courseRoomInput) courseRoomInput.addEventListener('blur', () => { store.data.courseInfo.classRoom = courseRoomInput.value; saveData(); });
-  const courseOfficeInput = document.getElementById('courseOfficeInput');
-  if(courseOfficeInput) courseOfficeInput.addEventListener('blur', () => { store.data.courseInfo.officeHours = courseOfficeInput.value; saveData(); });
+
+  const courseInfoSaveBtn = document.getElementById('courseInfoSaveBtn');
+  if(courseInfoSaveBtn) courseInfoSaveBtn.onclick = () => {
+    store.data.courseInfo = {
+      professor: document.getElementById('courseProfInput').value.trim(),
+      professorEmail: document.getElementById('courseProfEmailInput').value.trim(),
+      classDays: store.data.courseInfo.classDays || [],
+      classStart: document.getElementById('courseStartInput').value,
+      classEnd: document.getElementById('courseEndInput').value,
+      classRoom: document.getElementById('courseRoomInput').value.trim(),
+      officeHours: document.getElementById('courseOfficeInput').value.trim()
+    };
+    ui.editingCourseInfo = false; ui.viewingCourseInfo = true;
+    render(); saveData();
+  };
 
   const editDateLink = document.getElementById('editDateLink');
   if(editDateLink) editDateLink.onclick = () => { ui.editingDate = !ui.editingDate; render(); };

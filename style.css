@@ -85,6 +85,8 @@
   .info-editbtn svg{ width:14px; height:14px; }
   .info-empty{ text-align:left; font-size:13px; color:var(--ink-soft); font-style:italic; }
   .info-modal input{ width:100%; font-family:'Work Sans', sans-serif; font-size:14px; padding:9px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); margin-bottom:10px; }
+  .info-modal .course-info-row{ display:flex; gap:8px; align-items:center; margin-bottom:2px; }
+  .info-modal .course-info-row input{ width:auto; margin-bottom:0; }
   .info-field-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:1px; margin:2px 0 4px 0; }
 
   .receipt{

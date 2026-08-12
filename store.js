@@ -55,6 +55,8 @@ export const ui = {
   editingQuickId: null,
   editingInfo: false,
   viewingInfo: false,
+  viewingCourseInfo: false,
+  editingCourseInfo: false,
   activeTab: 'board',
   addingSubFor: null,
   addingLinkFor: null,

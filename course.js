@@ -50,7 +50,7 @@ export function renderCourseTimeline(){
         </div>
         <div class="timeline-main">
           <div class="timeline-title">${escapeHtml(it.title)}</div>
-          <div class="timeline-cat">${escapeHtml(it.__catName)}</div>
+          <div class="timeline-cat">${escapeHtml(it.__catName)}${store.data.categoryNotes[it.__catId] ? ` · ${escapeHtml(store.data.categoryNotes[it.__catId])}` : ''}</div>
         </div>
         ${hasScore
           ? `<div class="timeline-score">${it.score}/${it.maxScore}</div>`
@@ -96,10 +96,13 @@ export function renderCourseTimeline(){
         <div class="modal-closerow"><span class="expand-btn" id="manageCatsCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">Categories</div>
         ${store.data.categories.length > 0 ? `<div class="manage-cat-col-labels"><span>name</span><span>weight %</span></div>` : `<div class="info-empty">no categories yet — add your first one below</div>`}
-        ${store.data.categories.map(cat => `<div class="manage-cat-row">
-          <input type="text" class="manage-cat-name" data-mcname="${cat.id}" value="${escapeHtml(cat.name)}" maxlength="30" />
-          <input type="number" inputmode="numeric" class="manage-cat-weight" data-mcweight="${cat.id}" placeholder="—" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />
-          <span class="cat-del-icon" data-mcdel="${cat.id}">✕</span>
+        ${store.data.categories.map(cat => `<div class="manage-cat-group">
+          <div class="manage-cat-row">
+            <input type="text" class="manage-cat-name" data-mcname="${cat.id}" value="${escapeHtml(cat.name)}" maxlength="30" />
+            <input type="number" inputmode="numeric" class="manage-cat-weight" data-mcweight="${cat.id}" placeholder="—" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />
+            <span class="cat-del-icon" data-mcdel="${cat.id}">✕</span>
+          </div>
+          <input type="text" class="manage-cat-note" data-mcnote="${cat.id}" placeholder="note about this category (e.g. completion grades)" maxlength="80" value="${escapeHtml(store.data.categoryNotes[cat.id] || '')}" />
         </div>`).join('')}
         <div class="manage-cat-add-section">
           <div class="info-field-label" style="margin-top:2px;">add a category</div>
@@ -245,11 +248,19 @@ export function attachCourseEvents(){
     else delete store.data.categoryWeights[catId];
     saveData();
   }));
+  document.querySelectorAll('[data-mcnote]').forEach(el => el.addEventListener('blur', () => {
+    const catId = el.getAttribute('data-mcnote');
+    const val = el.value.trim();
+    if(val) store.data.categoryNotes[catId] = val;
+    else delete store.data.categoryNotes[catId];
+    saveData();
+  }));
   document.querySelectorAll('[data-mcdel]').forEach(el => el.onclick = () => {
     const catId = el.getAttribute('data-mcdel');
     if(!confirm('Delete this category and its assignments?')) return;
     store.data.categories = store.data.categories.filter(c => c.id !== catId);
     delete store.data.categoryWeights[catId];
+    delete store.data.categoryNotes[catId];
     render(); saveData();
   });
 

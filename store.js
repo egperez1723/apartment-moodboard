@@ -92,6 +92,7 @@ export function defaultState(name){
     courseInfo: { professor: '', professorEmail: '', isAsync: false, classDays: [], classStart: '', classEnd: '', classRoom: '', officeHours: '' },
     courseInfoCollapsed: false,
     categoryWeights: {},
+    categoryNotes: {},
     courseNotes: '',
     courseImportantNotes: []
   };
@@ -117,6 +118,7 @@ export function normalizeState(){
   if(store.data.courseInfo.classRoom === undefined) store.data.courseInfo.classRoom = '';
   if(store.data.courseInfoCollapsed === undefined) store.data.courseInfoCollapsed = false;
   if(!store.data.categoryWeights) store.data.categoryWeights = {};
+  if(!store.data.categoryNotes) store.data.categoryNotes = {};
   if(store.data.courseNotes === undefined) store.data.courseNotes = '';
   if(!store.data.courseImportantNotes) store.data.courseImportantNotes = [];
   // migrate the old single-string field, if it's still hanging around

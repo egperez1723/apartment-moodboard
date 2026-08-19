@@ -23,9 +23,9 @@ export function renderHomeScreen(){
       <div class="home-tasks-title">all tasks</div>
       <ul class="todo-list">
         ${tasks.map(t => `<li class="todo-item">
+          <span class="home-task-space" data-openspace="${t.spaceId}">${escapeHtml(t.spaceName)}</span>
           <div class="todo-check" data-hometoggle="${t.spaceId}|${t.id}"></div>
           <div class="todo-text">${escapeHtml(t.text)}${t.dueDate ? ` <span class="todo-date-badge ${t.dueDate < today ? 'overdue' : ''}">${new Date(t.dueDate+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>` : ''}</div>
-          <span class="home-task-space" data-openspace="${t.spaceId}">${escapeHtml(t.spaceName)}</span>
         </li>`).join('')}
       </ul>
     </div>`;

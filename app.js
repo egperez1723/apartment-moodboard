@@ -7,6 +7,7 @@ import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, rende
   renderCourseInfoCard, renderSyllabusCard, attachChromeEvents, attachHomeEvents } from './chrome.js';
 import { renderQuickList, renderTodoList, attachListsEvents } from './lists.js';
 import { renderMoodBoard, attachMoodboardEvents } from './moodboard.js';
+import { renderCourseTimeline, attachCourseEvents } from './course.js';
 import { BACK_ICON } from './shared.js';
 
 export function render(){
@@ -55,6 +56,8 @@ export function render(){
     html += renderQuickList();
   } else if(ui.activeTab === 'todo' && hasTodo){
     html += renderTodoList();
+  } else if(isCourse){
+    html += renderCourseTimeline();
   } else {
     html += renderMoodBoard();
   }
@@ -86,6 +89,7 @@ export function attachEvents(){
   attachChromeEvents();
   attachListsEvents();
   attachMoodboardEvents();
+  attachCourseEvents();
 }
 
 loadData();

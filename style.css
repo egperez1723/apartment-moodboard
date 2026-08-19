@@ -364,3 +364,28 @@
   .syllabus-chips{ display:flex; gap:8px; flex-wrap:wrap; }
   .card-badges-row-chip{ font-size:10px; color:var(--ink-soft); background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:2px 8px; }
   .syllabus-hint{ font-size:11px; color:var(--ink-soft); }
+
+  /* course timeline */
+  .course-timeline-head{ display:flex; justify-content:flex-end; margin-bottom:8px; }
+  .timeline-manage-link{ font-size:11px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; }
+  .timeline-list{ display:flex; flex-direction:column; margin-bottom:8px; }
+  .timeline-row{ display:flex; align-items:center; gap:12px; padding:10px 2px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .timeline-row.completed{ opacity:0.55; }
+  .timeline-row.completed .timeline-title{ text-decoration:line-through; }
+  .timeline-date{ width:44px; text-align:center; flex-shrink:0; }
+  .timeline-date-mon{ font-size:10px; color:var(--ink-soft); text-transform:uppercase; }
+  .timeline-date-day{ font-family:'Fraunces', serif; font-style:italic; font-size:18px; }
+  .timeline-date.overdue .timeline-date-mon, .timeline-date.overdue .timeline-date-day{ color:var(--terracotta); }
+  .timeline-main{ flex:1; min-width:0; }
+  .timeline-title{ font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .timeline-cat{ font-size:10px; color:var(--ink-soft); margin-top:1px; }
+  .timeline-score{ font-size:11px; color:var(--sage-dark); font-weight:600; flex-shrink:0; }
+  .timeline-check{ width:20px; height:20px; border-radius:50%; border:1.5px solid var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:white; }
+  .timeline-check svg{ width:12px; height:12px; }
+  .timeline-check.checked{ background:var(--sage-dark); border-color:var(--sage-dark); }
+
+  /* manage categories popup */
+  .manage-cat-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .manage-cat-name{ flex:1; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); }
+  .manage-cat-weight{ width:52px; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 8px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); text-align:center; }
+  .modal-box select{ width:100%; font-family:'Work Sans', sans-serif; font-size:14px; padding:10px 12px; border:2px solid var(--line); border-radius:12px; background:var(--cream); margin-bottom:14px; }

@@ -69,7 +69,10 @@ export const ui = {
   addingSpace: false,
   newSpaceFeatures: new Set(),
   homeEditMode: false,
-  spaceSettingsOpen: false
+  spaceSettingsOpen: false,
+  assignmentModalOpen: false,
+  assignmentDraft: null,
+  managingCourseCats: false
 };
 
 export function defaultState(name){

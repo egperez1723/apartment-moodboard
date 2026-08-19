@@ -168,6 +168,12 @@
   .todo-text{ flex:1; cursor:pointer; }
   .todo-text.done{ text-decoration:line-through; color:var(--ink-soft); }
   .todo-del{ font-size:13px; color:var(--line); cursor:pointer; }
+  .todo-cal{ color:var(--ink-soft); opacity:0.55; cursor:pointer; flex-shrink:0; display:flex; align-items:center; }
+  .todo-cal svg{ width:14px; height:14px; }
+  .todo-date-badge{ font-size:10px; color:var(--sage-dark); background:rgba(143,164,120,0.15); border-radius:10px; padding:1px 7px; font-weight:600; }
+  .todo-date-badge.overdue{ color:var(--terracotta); background:rgba(217,138,99,0.15); }
+  .todo-item-edit{ gap:6px; }
+  .todo-edit-date{ flex:0 0 130px; font-family:'Work Sans', sans-serif; font-size:12px; padding:5px 6px; border:1.5px solid var(--sage-dark); border-radius:6px; background:var(--cream); }
   .todo-del:hover{ color:var(--terracotta); }
   .todo-add-row{ display:flex; align-items:center; gap:8px; margin-top:6px; }
   .todo-add-row input{ flex:1; font-family:'Work Sans', sans-serif; font-size:14px; padding:8px 11px; border:1.5px solid var(--line); border-radius:10px; background:var(--cream); }

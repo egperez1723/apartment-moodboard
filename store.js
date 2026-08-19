@@ -54,6 +54,7 @@ export const ui = {
   catQuickAddOpen: null,
   budgetModalOpen: false,
   editingQuickId: null,
+  editingTodoId: null,
   editingInfo: false,
   viewingInfo: false,
   viewingCourseInfo: false,
@@ -103,6 +104,7 @@ export function normalizeState(){
   if(store.data.info.storageCode === undefined) store.data.info.storageCode = '';
   if(!store.data.quickList) store.data.quickList = [];
   if(!store.data.todoList) store.data.todoList = [];
+  store.data.todoList.forEach(t => { if(t.dueDate === undefined) t.dueDate = null; });
   if(store.data.infoCollapsed === undefined) store.data.infoCollapsed = false;
   if(!store.data.courseInfo) store.data.courseInfo = { professor: '', professorEmail: '', isAsync: false, classDays: [], classStart: '', classEnd: '', classRoom: '', officeHours: '' };
   if(store.data.courseInfo.isAsync === undefined) store.data.courseInfo.isAsync = false;

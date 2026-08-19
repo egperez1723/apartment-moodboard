@@ -2,7 +2,7 @@
 // the mood board's richer cards.
 
 import { store, ui, saveData } from './store.js';
-import { uid, escapeHtml, CHECK_ICON } from './shared.js';
+import { uid, escapeHtml, CHECK_ICON, CALENDAR_ICON } from './shared.js';
 import { render } from './app.js';
 
 export function renderQuickList(){
@@ -44,17 +44,31 @@ export function renderQuickList(){
 }
 
 
+function formatTodoDate(dateStr){
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
+}
+
 export function renderTodoList(){
   const list = store.data.todoList || [];
+  const withDate = [...list].filter(t => t.dueDate).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+  const noDate = list.filter(t => !t.dueDate);
+  const sorted = [...withDate, ...noDate];
+  const today = new Date().toISOString().slice(0,10);
+
   let html = `<div class="todo-section">
     <div class="todo-title">stuff to do</div>
     <div class="todo-subtitle">tasks to take care of</div>`;
 
-  if(list.length > 0){
+  if(sorted.length > 0){
     html += `<ul class="todo-list">
-      ${list.map(t => `<li class="todo-item">
+      ${sorted.map(t => ui.editingTodoId === t.id ? `<li class="todo-item todo-item-edit">
+        <input type="text" id="todoEditText" class="quick-edit-input" value="${escapeHtml(t.text)}" maxlength="80" data-id="${t.id}" />
+        <input type="date" id="todoEditDate" class="todo-edit-date" value="${t.dueDate || ''}" />
+        <span class="mini-plus" data-todoeditconfirm="${t.id}">${CHECK_ICON}</span>
+      </li>` : `<li class="todo-item">
         <div class="todo-check ${t.done?'done':''}" data-ttoggle="${t.id}"></div>
-        <div class="todo-text ${t.done?'done':''}" data-ttoggle="${t.id}">${escapeHtml(t.text)}</div>
+        <div class="todo-text ${t.done?'done':''}" data-ttoggle="${t.id}">${escapeHtml(t.text)}${t.dueDate ? ` <span class="todo-date-badge ${!t.done && t.dueDate < today ? 'overdue' : ''}">${formatTodoDate(t.dueDate)}</span>` : ''}</div>
+        <span class="todo-cal" data-todoeditstart="${t.id}">${CALENDAR_ICON}</span>
         <span class="todo-del" data-tdel="${t.id}">✕</span>
       </li>`).join('')}
     </ul>`;
@@ -193,37 +207,44 @@ export function attachListsEvents(){
     store.data.todoList = store.data.todoList.filter(x => x.id !== el.getAttribute('data-tdel'));
     render(); saveData();
   });
-  function wireTodoItem(li, item){
-    li.querySelector('[data-ttoggle].todo-check').onclick = () => { item.done = !item.done; render(); saveData(); };
-    li.querySelector('.todo-text').onclick = () => { item.done = !item.done; render(); saveData(); };
-    li.querySelector('.todo-del').onclick = () => {
-      store.data.todoList = store.data.todoList.filter(x => x.id !== item.id);
-      render(); saveData();
-    };
+  document.querySelectorAll('[data-todoeditstart]').forEach(el => el.onclick = () => {
+    ui.editingTodoId = el.getAttribute('data-todoeditstart');
+    render();
+  });
+  function confirmTodoEdit(){
+    const textInput = document.getElementById('todoEditText');
+    const dateInput = document.getElementById('todoEditDate');
+    if(!textInput) return;
+    const id = textInput.getAttribute('data-id');
+    const t = store.data.todoList.find(x => x.id === id);
+    const text = textInput.value.trim();
+    if(t && text){
+      t.text = text;
+      t.dueDate = dateInput.value || null;
+    }
+    ui.editingTodoId = null;
+    render(); saveData();
   }
+  document.querySelectorAll('[data-todoeditconfirm]').forEach(el => el.onclick = confirmTodoEdit);
+  const todoEditText = document.getElementById('todoEditText');
+  const todoEditDate = document.getElementById('todoEditDate');
+  if(todoEditText){
+    todoEditText.focus();
+    todoEditText.select();
+    todoEditText.addEventListener('keydown', e => {
+      if(e.key==='Enter') confirmTodoEdit();
+      if(e.key==='Escape'){ ui.editingTodoId=null; render(); }
+    });
+  }
+  if(todoEditDate) todoEditDate.addEventListener('keydown', e => { if(e.key==='Enter') confirmTodoEdit(); if(e.key==='Escape'){ ui.editingTodoId=null; render(); } });
+
   function addTodoItem(){
     const input = document.getElementById('todoAddInput');
     const text = input.value.trim();
     if(!text) return;
-    const item = {id: uid(), text, done:false};
-    store.data.todoList.push(item);
-    saveData();
-
-    let list = document.querySelector('.todo-list');
-    if(!list){
-      const section = document.querySelector('.todo-section');
-      list = document.createElement('ul');
-      list.className = 'todo-list';
-      section.insertBefore(list, section.querySelector('.todo-add-row'));
-    }
-    const li = document.createElement('li');
-    li.className = 'todo-item';
-    li.innerHTML = `<div class="todo-check" data-ttoggle="${item.id}"></div><div class="todo-text" data-ttoggle="${item.id}">${escapeHtml(text)}</div><span class="todo-del" data-tdel="${item.id}">✕</span>`;
-    list.appendChild(li);
-    wireTodoItem(li, item);
-
-    input.value = '';
-    input.focus();
+    store.data.todoList.push({id: uid(), text, done:false, dueDate: null});
+    render(); saveData();
+    document.getElementById('todoAddInput').focus();
   }
   const todoAddBtn = document.getElementById('todoAddBtn');
   if(todoAddBtn) todoAddBtn.onclick = addTodoItem;

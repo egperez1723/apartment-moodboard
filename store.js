@@ -89,7 +89,8 @@ export function defaultState(name){
     courseInfo: { professor: '', professorEmail: '', isAsync: false, classDays: [], classStart: '', classEnd: '', classRoom: '', officeHours: '' },
     courseInfoCollapsed: false,
     categoryWeights: {},
-    courseNotes: ''
+    courseNotes: '',
+    courseImportantNote: ''
   };
 }
 
@@ -113,6 +114,7 @@ export function normalizeState(){
   if(store.data.courseInfoCollapsed === undefined) store.data.courseInfoCollapsed = false;
   if(!store.data.categoryWeights) store.data.categoryWeights = {};
   if(store.data.courseNotes === undefined) store.data.courseNotes = '';
+  if(store.data.courseImportantNote === undefined) store.data.courseImportantNote = '';
   if(store.data.bought.length > 0){
     let restoreCat = store.data.categories.find(c => c.name === 'previously completed');
     if(!restoreCat){

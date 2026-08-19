@@ -241,13 +241,17 @@ export function renderCourseInfoCard(){
   let nextDueBadge = '';
   if(next){
     const dueLabel = new Date(next.dueDate + 'T00:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric'});
-    nextDueBadge = `<span class="next-due-badge" data-cardopen="${next.id}">next due: ${escapeHtml(next.title)} · ${dueLabel}</span>`;
+    nextDueBadge = `<span class="next-due-badge" data-timelineopen="${next.id}">next due: ${escapeHtml(next.title)} · ${dueLabel}</span>`;
   }
+
+  const importantNote = store.data.courseImportantNote || '';
+  const importantBadge = importantNote ? `<div class="important-note-badge" id="courseInfoOpenBtnFromBadge">${WARNING_ICON()} ${escapeHtml(importantNote)}</div>` : '';
 
   let html = `<div class="quick-access-row">
     <span class="quick-access-btn" id="courseInfoOpenBtn">${CARD_ICON} course info</span>
     ${nextDueBadge}
-  </div>`;
+  </div>
+  ${importantBadge}`;
 
   if(ui.viewingCourseInfo){
     const rows = [];
@@ -314,6 +318,8 @@ export function renderCourseInfoCard(){
         ` : ''}
         <div class="info-field-label">office hours</div>
         <input type="text" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" />
+        <div class="info-field-label">important note</div>
+        <input type="text" id="courseImportantInput" placeholder="e.g. no absences allowed" maxlength="80" value="${escapeHtml(store.data.courseImportantNote || '')}" />
         <div class="info-field-label">notes</div>
         <textarea class="notes-area" id="courseNotesInput" placeholder="e.g. no final for this class, or grades on a curve...">${escapeHtml(store.data.courseNotes || '')}</textarea>
         <div class="modal-actions" style="margin-top:14px;">
@@ -333,6 +339,7 @@ function formatTime12(t){
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2,'0')}${ampm}`;
 }
+function WARNING_ICON(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`; }
 function CHEVRON_UP(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M18 15l-6-6-6 6"/></svg>`; }
 function CHEVRON_DOWN(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M6 9l6 6 6-6"/></svg>`; }
 
@@ -380,6 +387,8 @@ export function renderFooter(){
 export function attachChromeEvents(){
   const courseInfoOpenBtn = document.getElementById('courseInfoOpenBtn');
   if(courseInfoOpenBtn) courseInfoOpenBtn.onclick = () => { ui.viewingCourseInfo = true; render(); };
+  const courseInfoOpenBtnFromBadge = document.getElementById('courseInfoOpenBtnFromBadge');
+  if(courseInfoOpenBtnFromBadge) courseInfoOpenBtnFromBadge.onclick = () => { ui.viewingCourseInfo = true; render(); };
 
   const courseInfoViewOverlay = document.getElementById('courseInfoViewOverlay');
   if(courseInfoViewOverlay) courseInfoViewOverlay.addEventListener('click', (e) => { if(e.target === courseInfoViewOverlay){ ui.viewingCourseInfo = false; render(); } });
@@ -429,6 +438,7 @@ export function attachChromeEvents(){
       officeHours: document.getElementById('courseOfficeInput').value.trim()
     };
     store.data.courseNotes = document.getElementById('courseNotesInput').value.trim();
+    store.data.courseImportantNote = document.getElementById('courseImportantInput').value.trim();
     ui.editingCourseInfo = false; ui.viewingCourseInfo = true;
     render(); saveData();
   };

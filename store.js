@@ -61,6 +61,7 @@ export const ui = {
   viewingCourseInfo: false,
   editingCourseInfo: false,
   courseNotesOpen: false,
+  importantNotesDraft: [],
   activeTab: 'board',
   addingSubFor: null,
   addingLinkFor: null,
@@ -92,7 +93,7 @@ export function defaultState(name){
     courseInfoCollapsed: false,
     categoryWeights: {},
     courseNotes: '',
-    courseImportantNote: ''
+    courseImportantNotes: []
   };
 }
 
@@ -117,7 +118,12 @@ export function normalizeState(){
   if(store.data.courseInfoCollapsed === undefined) store.data.courseInfoCollapsed = false;
   if(!store.data.categoryWeights) store.data.categoryWeights = {};
   if(store.data.courseNotes === undefined) store.data.courseNotes = '';
-  if(store.data.courseImportantNote === undefined) store.data.courseImportantNote = '';
+  if(!store.data.courseImportantNotes) store.data.courseImportantNotes = [];
+  // migrate the old single-string field, if it's still hanging around
+  if(store.data.courseImportantNote){
+    store.data.courseImportantNotes.push(store.data.courseImportantNote);
+    delete store.data.courseImportantNote;
+  }
   if(store.data.bought.length > 0){
     let restoreCat = store.data.categories.find(c => c.name === 'previously completed');
     if(!restoreCat){

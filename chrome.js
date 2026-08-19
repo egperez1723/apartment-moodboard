@@ -265,14 +265,14 @@ export function renderCourseInfoCard(){
     nextDueBadge = `<span class="next-due-badge" data-timelineopen="${next.id}">next due: ${escapeHtml(next.title)} · ${dueLabel}</span>`;
   }
 
-  const importantNote = store.data.courseImportantNote || '';
-  const importantBadge = importantNote ? `<div class="important-note-badge" id="courseInfoOpenBtnFromBadge">${WARNING_ICON()} ${escapeHtml(importantNote)}</div>` : '';
+  const importantNotes = store.data.courseImportantNotes || [];
+  const importantBadges = importantNotes.map(n => `<div class="important-note-badge" data-openinfobtn="1">${WARNING_ICON()} ${escapeHtml(n)}</div>`).join('');
 
   let html = `<div class="quick-access-row">
     <span class="quick-access-btn" id="courseInfoOpenBtn">${CARD_ICON} course info</span>
     ${nextDueBadge}
   </div>
-  ${importantBadge}`;
+  ${importantBadges}`;
 
   if(ui.viewingCourseInfo){
     const rows = [];
@@ -339,8 +339,14 @@ export function renderCourseInfoCard(){
         ` : ''}
         <div class="info-field-label">office hours</div>
         <input type="text" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" />
-        <div class="info-field-label">important note</div>
-        <input type="text" id="courseImportantInput" placeholder="e.g. no absences allowed" maxlength="80" value="${escapeHtml(store.data.courseImportantNote || '')}" />
+        <div class="info-field-label">important notes</div>
+        <div id="importantNotesList">
+          ${ui.importantNotesDraft.map((n, i) => `<div class="course-info-row" style="margin-bottom:8px;">
+            <input type="text" class="important-note-draft-input" data-noteidx="${i}" placeholder="e.g. no absences allowed" maxlength="80" value="${escapeHtml(n)}" style="flex:1;" />
+            <span class="cat-del-icon" data-notedel="${i}">✕</span>
+          </div>`).join('')}
+        </div>
+        <div class="timeline-manage-link" id="addImportantNoteBtn" style="display:inline-block; margin-bottom:14px; cursor:pointer;">+ add another note</div>
         <div class="info-field-label">notes</div>
         <textarea class="notes-area" id="courseNotesInput" placeholder="e.g. no final for this class, or grades on a curve...">${escapeHtml(store.data.courseNotes || '')}</textarea>
         <div class="modal-actions" style="margin-top:14px;">
@@ -408,8 +414,7 @@ export function renderFooter(){
 export function attachChromeEvents(){
   const courseInfoOpenBtn = document.getElementById('courseInfoOpenBtn');
   if(courseInfoOpenBtn) courseInfoOpenBtn.onclick = () => { ui.viewingCourseInfo = true; render(); };
-  const courseInfoOpenBtnFromBadge = document.getElementById('courseInfoOpenBtnFromBadge');
-  if(courseInfoOpenBtnFromBadge) courseInfoOpenBtnFromBadge.onclick = () => { ui.viewingCourseInfo = true; render(); };
+  document.querySelectorAll('[data-openinfobtn]').forEach(el => el.onclick = () => { ui.viewingCourseInfo = true; render(); });
 
   const courseInfoViewOverlay = document.getElementById('courseInfoViewOverlay');
   if(courseInfoViewOverlay) courseInfoViewOverlay.addEventListener('click', (e) => { if(e.target === courseInfoViewOverlay){ ui.viewingCourseInfo = false; render(); } });
@@ -418,7 +423,12 @@ export function attachChromeEvents(){
   const courseNotesToggle = document.getElementById('courseNotesToggle');
   if(courseNotesToggle) courseNotesToggle.onclick = () => { ui.courseNotesOpen = !ui.courseNotesOpen; render(); };
   const courseInfoEditFromViewBtn = document.getElementById('courseInfoEditFromViewBtn');
-  if(courseInfoEditFromViewBtn) courseInfoEditFromViewBtn.onclick = () => { ui.viewingCourseInfo = false; ui.editingCourseInfo = true; render(); };
+  if(courseInfoEditFromViewBtn) courseInfoEditFromViewBtn.onclick = () => {
+    ui.viewingCourseInfo = false;
+    ui.editingCourseInfo = true;
+    ui.importantNotesDraft = [...(store.data.courseImportantNotes || [])];
+    render();
+  };
 
   const courseInfoModalOverlay = document.getElementById('courseInfoModalOverlay');
   if(courseInfoModalOverlay) courseInfoModalOverlay.addEventListener('click', (e) => { if(e.target === courseInfoModalOverlay){ ui.editingCourseInfo = false; ui.viewingCourseInfo = true; render(); } });
@@ -445,8 +455,26 @@ export function attachChromeEvents(){
     render();
   };
 
+  const addImportantNoteBtn = document.getElementById('addImportantNoteBtn');
+  if(addImportantNoteBtn) addImportantNoteBtn.onclick = () => {
+    syncImportantNotesDraft();
+    ui.importantNotesDraft.push('');
+    render();
+  };
+  document.querySelectorAll('[data-notedel]').forEach(el => el.onclick = () => {
+    syncImportantNotesDraft();
+    ui.importantNotesDraft.splice(Number(el.getAttribute('data-notedel')), 1);
+    render();
+  });
+  function syncImportantNotesDraft(){
+    document.querySelectorAll('.important-note-draft-input').forEach(el => {
+      ui.importantNotesDraft[Number(el.getAttribute('data-noteidx'))] = el.value;
+    });
+  }
+
   const courseInfoSaveBtn = document.getElementById('courseInfoSaveBtn');
   if(courseInfoSaveBtn) courseInfoSaveBtn.onclick = () => {
+    syncImportantNotesDraft();
     const isAsync = document.getElementById('courseAsyncCheck').checked;
     store.data.courseInfo = {
       professor: document.getElementById('courseProfInput').value.trim(),
@@ -459,7 +487,8 @@ export function attachChromeEvents(){
       officeHours: document.getElementById('courseOfficeInput').value.trim()
     };
     store.data.courseNotes = document.getElementById('courseNotesInput').value.trim();
-    store.data.courseImportantNote = document.getElementById('courseImportantInput').value.trim();
+    store.data.courseImportantNotes = ui.importantNotesDraft.map(n => n.trim()).filter(Boolean);
+    ui.importantNotesDraft = [];
     ui.editingCourseInfo = false; ui.viewingCourseInfo = true;
     render(); saveData();
   };

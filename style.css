@@ -366,6 +366,8 @@
   .syllabus-hint{ font-size:11px; color:var(--ink-soft); }
 
   /* course timeline */
+  .course-notes-card{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:16px; box-shadow:2px 3px 0 rgba(74,63,49,0.08); }
+  .course-notes-card .notes-area{ margin-bottom:0; min-height:44px; }
   .course-timeline-head{ display:flex; justify-content:flex-end; margin-bottom:8px; }
   .timeline-manage-link{ font-size:11px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; }
   .timeline-list{ display:flex; flex-direction:column; margin-bottom:8px; }

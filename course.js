@@ -97,6 +97,7 @@ export function renderCourseTimeline(){
         <div class="modal-title">Categories</div>
         ${store.data.categories.length === 0 ? `<div class="info-empty">no categories yet — add your first one below</div>` : ''}
         ${store.data.categories.map(cat => `<div class="manage-cat-card">
+          <div class="manage-cat-field-labels"><span>category name</span><span>weight %</span></div>
           <div class="manage-cat-row">
             <input type="text" class="manage-cat-name" data-mcname="${cat.id}" value="${escapeHtml(cat.name)}" maxlength="30" />
             <input type="number" inputmode="numeric" class="manage-cat-weight" data-mcweight="${cat.id}" placeholder="wt %" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />
@@ -106,6 +107,7 @@ export function renderCourseTimeline(){
         </div>`).join('')}
         <div class="manage-cat-add-section">
           <div class="info-field-label" style="margin-top:2px;">add a category</div>
+          <div class="manage-cat-field-labels"><span>category name</span><span>weight %</span></div>
           <div class="manage-cat-row">
             <input type="text" id="newCatNameInline" class="manage-cat-name" placeholder="e.g. quizzes" maxlength="30" />
             <input type="number" inputmode="numeric" id="newCatWeightInline" class="manage-cat-weight" placeholder="wt %" maxlength="3" />

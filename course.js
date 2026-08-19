@@ -95,15 +95,19 @@ export function renderCourseTimeline(){
       <div class="modal-box">
         <div class="modal-closerow"><span class="expand-btn" id="manageCatsCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">Categories</div>
-        ${store.data.categories.length === 0 ? `<div class="info-empty">no categories yet</div>` : ''}
+        ${store.data.categories.length > 0 ? `<div class="manage-cat-col-labels"><span>name</span><span>weight %</span></div>` : `<div class="info-empty">no categories yet — add your first one below</div>`}
         ${store.data.categories.map(cat => `<div class="manage-cat-row">
           <input type="text" class="manage-cat-name" data-mcname="${cat.id}" value="${escapeHtml(cat.name)}" maxlength="30" />
-          <input type="number" inputmode="numeric" class="manage-cat-weight" data-mcweight="${cat.id}" placeholder="wt%" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />
+          <input type="number" inputmode="numeric" class="manage-cat-weight" data-mcweight="${cat.id}" placeholder="—" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />
           <span class="cat-del-icon" data-mcdel="${cat.id}">✕</span>
         </div>`).join('')}
-        <div class="new-cat-row" style="margin-top:12px;">
-          <input type="text" id="newCatNameInline" placeholder="new category name" maxlength="30" style="flex:1; margin-bottom:0;" />
-          <span class="round-plus" id="addCatInlineBtn">+</span>
+        <div class="manage-cat-add-section">
+          <div class="info-field-label" style="margin-top:2px;">add a category</div>
+          <div class="manage-cat-row">
+            <input type="text" id="newCatNameInline" placeholder="e.g. quizzes" maxlength="30" />
+            <input type="number" inputmode="numeric" id="newCatWeightInline" placeholder="wt %" maxlength="3" />
+            <span class="round-plus" id="addCatInlineBtn">+</span>
+          </div>
         </div>
       </div>
     </div>`;
@@ -251,10 +255,18 @@ export function attachCourseEvents(){
 
   const addCatInlineBtn = document.getElementById('addCatInlineBtn');
   if(addCatInlineBtn) addCatInlineBtn.onclick = () => {
-    const input = document.getElementById('newCatNameInline');
-    const name = input ? input.value.trim() : '';
-    if(!name) return;
-    store.data.categories.push({ id: uid(), name, items: [] });
+    const nameInput = document.getElementById('newCatNameInline');
+    const weightInput = document.getElementById('newCatWeightInline');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if(!name) { nameInput && nameInput.focus(); return; }
+    const newCat = { id: uid(), name, items: [] };
+    store.data.categories.push(newCat);
+    const weightVal = weightInput ? weightInput.value.trim() : '';
+    if(weightVal) store.data.categoryWeights[newCat.id] = Number(weightVal);
     render(); saveData();
   };
+  ['newCatNameInline', 'newCatWeightInline'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('addCatInlineBtn').click(); } });
+  });
 }

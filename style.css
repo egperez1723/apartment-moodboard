@@ -387,6 +387,10 @@
   .timeline-check.checked{ background:var(--sage-dark); border-color:var(--sage-dark); }
 
   /* manage categories popup */
+  .manage-cat-col-labels{ display:flex; gap:8px; margin-bottom:6px; padding:0 2px; }
+  .manage-cat-col-labels span:first-child{ flex:1; font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; }
+  .manage-cat-col-labels span:last-child{ width:52px; font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; text-align:center; }
+  .manage-cat-add-section{ margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); }
   .manage-cat-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
   .manage-cat-name{ flex:1; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); }
   .manage-cat-weight{ width:52px; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 8px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); text-align:center; }

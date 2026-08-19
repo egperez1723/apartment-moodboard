@@ -41,6 +41,7 @@ export const ALL_FEATURES = [
 // list, etc). `store.spaces` is the lightweight list for the home screen.
 // `store.currentSpaceId` / `store.features` describe which space is open.
 export const store = { data: null, spaces: [], currentSpaceId: null, features: [] };
+const spaceDataCache = {}; // spaceId -> parsed state, kept warm from the index listener for the home-screen task list
 
 // `ui` holds transient interface state (which modal is open, which tab is
 // active, etc) — never saved to the cloud, just what's currently on screen.
@@ -198,9 +199,51 @@ function subscribeSpacesIndex(){
   if(unsubscribeIndex) unsubscribeIndex();
   unsubscribeIndex = spacesCol.onSnapshot((snap) => {
     store.spaces = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [] }));
+    snap.docs.forEach(d => {
+      // currently-open space already has the freshest data in store.data, so
+      // don't let a possibly-stale cached copy stomp on unsaved local edits
+      if(d.id === store.currentSpaceId) return;
+      const raw = d.data().state;
+      if(!raw) return;
+      try{ spaceDataCache[d.id] = JSON.parse(raw); }catch(e){ /* leave whatever was cached before */ }
+    });
     try{ localStorage.setItem(SPACES_INDEX_KEY, JSON.stringify(store.spaces)); }catch(e){}
     if(!store.currentSpaceId) render();
   }, (err) => console.error('spaces index sync error', err));
+}
+
+// All not-done "stuff to do" items across every space that has the todo
+// feature, tagged with which space they came from. Sourced from the warm
+// cache above, so no extra reads.
+export function getAllHomeTasks(){
+  const tasks = [];
+  store.spaces.forEach(s => {
+    if(!(s.features || []).includes('todo')) return;
+    const cached = spaceDataCache[s.id];
+    if(!cached || !cached.todoList) return;
+    cached.todoList.forEach(t => {
+      if(t.done) return;
+      tasks.push({ ...t, spaceId: s.id, spaceName: s.name });
+    });
+  });
+  tasks.sort((a,b) => {
+    if(a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if(a.dueDate) return -1;
+    if(b.dueDate) return 1;
+    return 0;
+  });
+  return tasks;
+}
+
+export async function toggleHomeTask(spaceId, taskId){
+  const cached = spaceDataCache[spaceId];
+  if(!cached || !cached.todoList) return;
+  const task = cached.todoList.find(t => t.id === taskId);
+  if(!task) return;
+  task.done = !task.done;
+  render();
+  try{ await spacesCol.doc(spaceId).set({ state: JSON.stringify(cached) }, { merge: true }); }
+  catch(e){ console.error('home task toggle sync failed', e); }
 }
 
 export function openSpace(id){
@@ -250,6 +293,9 @@ export function openSpace(id){
 }
 
 export function goHome(){
+  if(store.currentSpaceId && store.data){
+    spaceDataCache[store.currentSpaceId] = store.data;
+  }
   if(unsubscribeSpace) unsubscribeSpace();
   unsubscribeSpace = null;
   store.currentSpaceId = null;

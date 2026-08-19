@@ -2,8 +2,9 @@
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
 import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
-  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, computeRunningGrade, computeCourseProgress, computeNextDue } from './store.js';
-import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON } from './shared.js';
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, computeRunningGrade, computeCourseProgress, computeNextDue,
+  getAllHomeTasks, toggleHomeTask } from './store.js';
+import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON, CALENDAR_ICON } from './shared.js';
 import { render } from './app.js';
 
 export function renderHomeScreen(){
@@ -14,6 +15,21 @@ export function renderHomeScreen(){
       <div class="subtitle">pick a space, or start a new one</div>
     </header>
   `;
+
+  const tasks = getAllHomeTasks();
+  if(tasks.length > 0){
+    const today = new Date().toISOString().slice(0,10);
+    html += `<div class="home-tasks-card">
+      <div class="home-tasks-title">all tasks</div>
+      <ul class="todo-list">
+        ${tasks.map(t => `<li class="todo-item">
+          <div class="todo-check" data-hometoggle="${t.spaceId}|${t.id}"></div>
+          <div class="todo-text">${escapeHtml(t.text)}${t.dueDate ? ` <span class="todo-date-badge ${t.dueDate < today ? 'overdue' : ''}">${new Date(t.dueDate+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>` : ''}</div>
+          <span class="home-task-space" data-openspace="${t.spaceId}">${escapeHtml(t.spaceName)}</span>
+        </li>`).join('')}
+      </ul>
+    </div>`;
+  }
 
   if(store.spaces.length === 0){
     html += `<div class="empty-hint">no spaces yet — add one below to get started</div>`;
@@ -58,6 +74,11 @@ export function renderHomeScreen(){
 }
 
 export function attachHomeEvents(){
+  document.querySelectorAll('[data-hometoggle]').forEach(el => el.onclick = () => {
+    const [spaceId, taskId] = el.getAttribute('data-hometoggle').split('|');
+    toggleHomeTask(spaceId, taskId);
+  });
+
   const homeEditToggle = document.getElementById('homeEditToggle');
   if(homeEditToggle) homeEditToggle.onclick = () => { ui.homeEditMode = !ui.homeEditMode; render(); };
 

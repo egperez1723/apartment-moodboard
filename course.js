@@ -97,19 +97,19 @@ export function renderCourseTimeline(){
         <div class="modal-title">Categories</div>
         ${store.data.categories.length === 0 ? `<div class="info-empty">no categories yet — add your first one below</div>` : ''}
         ${store.data.categories.map(cat => `<div class="manage-cat-card">
-          <div class="manage-cat-field-labels"><span>category name</span><span>weight %</span></div>
+          <div class="info-field-label">category name</div>
+          <input type="text" class="manage-cat-name-full" data-mcname="${cat.id}" value="${escapeHtml(cat.name)}" maxlength="30" />
+          <div class="manage-cat-field-labels" style="margin-top:8px;"><span>weight %</span></div>
           <div class="manage-cat-row">
-            <input type="text" class="manage-cat-name" data-mcname="${cat.id}" value="${escapeHtml(cat.name)}" maxlength="30" />
             <input type="number" inputmode="numeric" class="manage-cat-weight" data-mcweight="${cat.id}" placeholder="wt %" maxlength="3" value="${store.data.categoryWeights[cat.id] || ''}" />
+            <input type="text" class="manage-cat-note" data-mcnote="${cat.id}" placeholder="note about this category (optional)" maxlength="80" value="${escapeHtml(store.data.categoryNotes[cat.id] || '')}" style="flex:1;" />
             <span class="cat-del-icon" data-mcdel="${cat.id}">✕</span>
           </div>
-          <input type="text" class="manage-cat-note" data-mcnote="${cat.id}" placeholder="note about this category (optional)" maxlength="80" value="${escapeHtml(store.data.categoryNotes[cat.id] || '')}" />
         </div>`).join('')}
         <div class="manage-cat-add-section">
           <div class="info-field-label" style="margin-top:2px;">add a category</div>
-          <div class="manage-cat-field-labels"><span>category name</span><span>weight %</span></div>
-          <div class="manage-cat-row">
-            <input type="text" id="newCatNameInline" class="manage-cat-name" placeholder="e.g. quizzes" maxlength="30" />
+          <input type="text" id="newCatNameInline" class="manage-cat-name-full" placeholder="e.g. quizzes" maxlength="30" />
+          <div class="manage-cat-row" style="margin-top:8px;">
             <input type="number" inputmode="numeric" id="newCatWeightInline" class="manage-cat-weight" placeholder="wt %" maxlength="3" />
             <span class="round-plus" id="addCatInlineBtn">+</span>
           </div>

@@ -265,6 +265,8 @@ export function renderCourseInfoCard(){
     if(!ci.isAsync && ci.classRoom) rows.push(['room', ci.classRoom]);
     if(ci.officeHours) rows.push(['office hrs', ci.officeHours]);
 
+    const notes = store.data.courseNotes || '';
+
     html += `<div class="modal-overlay" id="courseInfoViewOverlay">
       <div class="modal-box" style="padding:0; max-width:300px; background:transparent; box-shadow:none;">
         <div class="modal-closerow"><span class="expand-btn" id="courseInfoViewCloseBtn" style="background:var(--paper);">${COLLAPSE_ICON}</span></div>
@@ -275,6 +277,11 @@ export function renderCourseInfoCard(){
           </div>
           <div class="index-card-body">
             ${rows.length === 0 ? `<div class="info-empty">nothing added yet — tap the pencil to fill it in</div>` : rows.map(([label,val]) => `<div class="index-card-row"><span class="index-card-label">${escapeHtml(label)}</span><span class="index-card-value">${escapeHtml(val)}${label==='email' ? ` <span class="info-copy-btn" data-copyval="${escapeHtml(val)}" title="copy email" style="display:inline-flex; vertical-align:middle; margin-left:4px;">${COPY_ICON}</span>` : ''}</span></div>`).join('')}
+            ${notes ? `<div class="index-card-notes-toggle" id="courseNotesToggle">
+              <span>notes</span>
+              <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseNotesOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
+            </div>
+            ${ui.courseNotesOpen ? `<div class="index-card-notes-body">${escapeHtml(notes)}</div>` : ''}` : ''}
           </div>
         </div>
       </div>
@@ -307,6 +314,8 @@ export function renderCourseInfoCard(){
         ` : ''}
         <div class="info-field-label">office hours</div>
         <input type="text" id="courseOfficeInput" placeholder="e.g. Tues 2-4pm, Rm 204" value="${escapeHtml(ci.officeHours || '')}" />
+        <div class="info-field-label">notes</div>
+        <textarea class="notes-area" id="courseNotesInput" placeholder="e.g. no final for this class, or grades on a curve...">${escapeHtml(store.data.courseNotes || '')}</textarea>
         <div class="modal-actions" style="margin-top:14px;">
           <button class="modal-cancel" id="courseInfoCancelBtn">cancel</button>
           <button class="modal-add" id="courseInfoSaveBtn">save</button>
@@ -376,6 +385,8 @@ export function attachChromeEvents(){
   if(courseInfoViewOverlay) courseInfoViewOverlay.addEventListener('click', (e) => { if(e.target === courseInfoViewOverlay){ ui.viewingCourseInfo = false; render(); } });
   const courseInfoViewCloseBtn = document.getElementById('courseInfoViewCloseBtn');
   if(courseInfoViewCloseBtn) courseInfoViewCloseBtn.onclick = () => { ui.viewingCourseInfo = false; render(); };
+  const courseNotesToggle = document.getElementById('courseNotesToggle');
+  if(courseNotesToggle) courseNotesToggle.onclick = () => { ui.courseNotesOpen = !ui.courseNotesOpen; render(); };
   const courseInfoEditFromViewBtn = document.getElementById('courseInfoEditFromViewBtn');
   if(courseInfoEditFromViewBtn) courseInfoEditFromViewBtn.onclick = () => { ui.viewingCourseInfo = false; ui.editingCourseInfo = true; render(); };
 
@@ -417,6 +428,7 @@ export function attachChromeEvents(){
       classRoom: isAsync ? '' : document.getElementById('courseRoomInput').value.trim(),
       officeHours: document.getElementById('courseOfficeInput').value.trim()
     };
+    store.data.courseNotes = document.getElementById('courseNotesInput').value.trim();
     ui.editingCourseInfo = false; ui.viewingCourseInfo = true;
     render(); saveData();
   };

@@ -30,12 +30,7 @@ export function renderCourseTimeline(){
   const sorted = [...withDate, ...noDate];
   const today = new Date().toISOString().slice(0,10);
 
-  let html = `<div class="course-notes-card">
-    <div class="info-field-label">class notes</div>
-    <textarea class="notes-area" id="courseNotesInput" placeholder="e.g. no final for this class, or grades on a curve...">${escapeHtml(store.data.courseNotes || '')}</textarea>
-  </div>`;
-
-  html += `<div class="course-timeline-head">
+  let html = `<div class="course-timeline-head">
     <span class="timeline-manage-link" id="manageCatsLink">manage categories</span>
   </div>`;
 
@@ -155,12 +150,6 @@ function syncAssignmentDraft(){
 }
 
 export function attachCourseEvents(){
-  const courseNotesInput = document.getElementById('courseNotesInput');
-  if(courseNotesInput) courseNotesInput.addEventListener('blur', () => {
-    store.data.courseNotes = courseNotesInput.value;
-    saveData();
-  });
-
   const manageCatsLink = document.getElementById('manageCatsLink');
   if(manageCatsLink) manageCatsLink.onclick = () => { ui.managingCourseCats = true; render(); };
 

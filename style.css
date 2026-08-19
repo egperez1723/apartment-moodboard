@@ -66,6 +66,8 @@
   .index-card-editbtn svg{ width:11px; height:11px; }
   .index-card-body{ padding:14px 16px; }
   .index-card-row{ display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:8px 0; border-bottom:1px solid var(--cream); color:var(--ink); }
+  .index-card-notes-toggle{ display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:8px 0; cursor:pointer; color:var(--ink-soft); font-weight:600; }
+  .index-card-notes-body{ font-size:12.5px; color:var(--ink); background:var(--cream); border-radius:8px; padding:10px; margin-top:4px; white-space:pre-wrap; }
   .index-card-row:last-child{ border-bottom:none; }
   .index-card-label{ color:var(--ink-soft); text-transform:lowercase; flex-shrink:0; }
   .index-card-value{ font-weight:500; text-align:right; word-break:break-word; }
@@ -366,8 +368,6 @@
   .syllabus-hint{ font-size:11px; color:var(--ink-soft); }
 
   /* course timeline */
-  .course-notes-card{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:16px; box-shadow:2px 3px 0 rgba(74,63,49,0.08); }
-  .course-notes-card .notes-area{ margin-bottom:0; min-height:44px; }
   .course-timeline-head{ display:flex; justify-content:flex-end; margin-bottom:8px; }
   .timeline-manage-link{ font-size:11px; color:var(--ink-soft); text-decoration:underline; cursor:pointer; }
   .timeline-list{ display:flex; flex-direction:column; margin-bottom:8px; }

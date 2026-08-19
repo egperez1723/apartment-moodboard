@@ -58,6 +58,7 @@ export const ui = {
   viewingInfo: false,
   viewingCourseInfo: false,
   editingCourseInfo: false,
+  courseNotesOpen: false,
   activeTab: 'board',
   addingSubFor: null,
   addingLinkFor: null,

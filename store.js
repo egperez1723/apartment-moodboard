@@ -206,7 +206,8 @@ function subscribeSpacesIndex(){
 
   if(unsubscribeIndex) unsubscribeIndex();
   unsubscribeIndex = spacesCol.onSnapshot((snap) => {
-    store.spaces = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [] }));
+    store.spaces = snap.docs.map((d, i) => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [], order: d.data().order !== undefined ? d.data().order : 10000 + i }));
+    store.spaces.sort((a, b) => a.order - b.order);
     snap.docs.forEach(d => {
       // currently-open space already has the freshest data in store.data, so
       // don't let a possibly-stale cached copy stomp on unsaved local edits
@@ -318,14 +319,28 @@ export async function createSpace(name, features){
   const cleanName = (name || '').trim() || 'untitled space';
   const id = uid();
   const state = defaultState(cleanName);
+  const maxOrder = store.spaces.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
   try{
-    await spacesCol.doc(id).set({ name: cleanName, features: features || [], state: JSON.stringify(state) });
+    await spacesCol.doc(id).set({ name: cleanName, features: features || [], order: maxOrder + 1, state: JSON.stringify(state) });
   }catch(e){
     console.error('create space failed', e);
     alert('Could not create that space — check your connection and try again.');
     return;
   }
   openSpace(id);
+}
+
+export async function moveSpace(id, dir){
+  const idx = store.spaces.findIndex(s => s.id === id);
+  const swapWith = dir === 'up' ? idx - 1 : idx + 1;
+  if(idx === -1 || swapWith < 0 || swapWith >= store.spaces.length) return;
+  [store.spaces[idx], store.spaces[swapWith]] = [store.spaces[swapWith], store.spaces[idx]];
+  render();
+  try{
+    const batch = db.batch();
+    store.spaces.forEach((s, i) => { s.order = i; batch.set(spacesCol.doc(s.id), { order: i }, { merge: true }); });
+    await batch.commit();
+  }catch(e){ console.error('reorder spaces failed', e); }
 }
 
 export async function renameSpace(name){

@@ -2,7 +2,7 @@
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
 import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
-  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, computeRunningGrade, computeCourseProgress, computeNextDue,
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, moveSpace, computeRunningGrade, computeCourseProgress, computeNextDue,
   getAllHomeTasks, toggleHomeTask } from './store.js';
 import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON, CALENDAR_ICON } from './shared.js';
 import { render } from './app.js';
@@ -43,7 +43,11 @@ export function renderHomeScreen(){
           <div class="space-row-name hand">${escapeHtml(s.name)}</div>
           <div class="space-row-meta">${featureLabels.length ? featureLabels.join(' · ') : 'mood board only'}</div>
         </div>
-        ${ui.homeEditMode ? `<span class="cat-del-icon" data-delspace="${s.id}">✕</span>` : ''}
+        ${ui.homeEditMode ? `<div class="cat-edit-actions">
+          <span class="cat-move-btn" data-spacemove="${s.id}" data-dir="up">↑</span>
+          <span class="cat-move-btn" data-spacemove="${s.id}" data-dir="down">↓</span>
+          <span class="cat-del-icon" data-delspace="${s.id}">✕</span>
+        </div>` : ''}
       </div>`;
     });
     html += `</div>`;
@@ -83,12 +87,16 @@ export function attachHomeEvents(){
   if(homeEditToggle) homeEditToggle.onclick = () => { ui.homeEditMode = !ui.homeEditMode; render(); };
 
   document.querySelectorAll('[data-openspace]').forEach(el => el.onclick = (e) => {
-    if(e.target.closest('[data-delspace]')) return;
+    if(e.target.closest('[data-delspace], [data-spacemove]')) return;
     openSpace(el.getAttribute('data-openspace'));
   });
   document.querySelectorAll('[data-delspace]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();
     deleteSpace(el.getAttribute('data-delspace'));
+  });
+  document.querySelectorAll('[data-spacemove]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    moveSpace(el.getAttribute('data-spacemove'), el.getAttribute('data-dir'));
   });
 
   const addSpaceBtn = document.getElementById('addSpaceBtn');

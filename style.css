@@ -69,6 +69,8 @@
   .index-card-row{ display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:8px 0; border-bottom:1px solid var(--cream); color:var(--ink); }
   .index-card-notes-toggle{ display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:8px 0; cursor:pointer; color:var(--ink-soft); font-weight:600; }
   .index-card-notes-body{ font-size:12.5px; color:var(--ink); background:var(--cream); border-radius:8px; padding:10px; margin-top:4px; white-space:pre-wrap; }
+  .index-card-materials-list{ margin:0; padding-left:18px; }
+  .index-card-materials-list li{ margin-bottom:4px; }
   .index-card-row:last-child{ border-bottom:none; }
   .index-card-label{ color:var(--ink-soft); text-transform:lowercase; flex-shrink:0; }
   .index-card-value{ font-weight:500; text-align:right; word-break:break-word; }

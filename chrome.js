@@ -299,6 +299,7 @@ export function renderCourseInfoCard(){
     if(ci.officeHours) rows.push(['office hrs', ci.officeHours]);
 
     const notes = store.data.courseNotes || '';
+    const materials = store.data.courseMaterials || [];
 
     html += `<div class="modal-overlay" id="courseInfoViewOverlay">
       <div class="modal-box" style="padding:0; max-width:300px; background:transparent; box-shadow:none;">
@@ -310,6 +311,11 @@ export function renderCourseInfoCard(){
           </div>
           <div class="index-card-body">
             ${rows.length === 0 ? `<div class="info-empty">nothing added yet — tap the pencil to fill it in</div>` : rows.map(([label,val]) => `<div class="index-card-row"><span class="index-card-label">${escapeHtml(label)}</span><span class="index-card-value">${escapeHtml(val)}${label==='email' ? ` <span class="info-copy-btn" data-copyval="${escapeHtml(val)}" title="copy email" style="display:inline-flex; vertical-align:middle; margin-left:4px;">${COPY_ICON}</span>` : ''}</span></div>`).join('')}
+            ${materials.length > 0 ? `<div class="index-card-notes-toggle" id="courseMaterialsToggle">
+              <span>materials</span>
+              <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseMaterialsOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
+            </div>
+            ${ui.courseMaterialsOpen ? `<div class="index-card-notes-body"><ul class="index-card-materials-list">${materials.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul></div>` : ''}` : ''}
             ${notes ? `<div class="index-card-notes-toggle" id="courseNotesToggle">
               <span>notes</span>
               <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseNotesOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
@@ -355,6 +361,14 @@ export function renderCourseInfoCard(){
           </div>`).join('')}
         </div>
         <div class="timeline-manage-link" id="addImportantNoteBtn" style="display:inline-block; margin-bottom:14px; cursor:pointer;">+ add another note</div>
+        <div class="info-field-label">required materials</div>
+        <div id="materialsList">
+          ${ui.materialsDraft.map((m, i) => `<div class="course-info-row" style="margin-bottom:8px;">
+            <input type="text" class="material-draft-input" data-materialidx="${i}" placeholder="e.g. TI-84 calculator" maxlength="80" value="${escapeHtml(m)}" style="flex:1;" />
+            <span class="cat-del-icon" data-materialdel="${i}">✕</span>
+          </div>`).join('')}
+        </div>
+        <div class="timeline-manage-link" id="addMaterialBtn" style="display:inline-block; margin-bottom:14px; cursor:pointer;">+ add another material</div>
         <div class="info-field-label">notes</div>
         <textarea class="notes-area" id="courseNotesInput" placeholder="e.g. no final for this class, or grades on a curve...">${escapeHtml(store.data.courseNotes || '')}</textarea>
         <div class="modal-actions" style="margin-top:14px;">
@@ -430,11 +444,14 @@ export function attachChromeEvents(){
   if(courseInfoViewCloseBtn) courseInfoViewCloseBtn.onclick = () => { ui.viewingCourseInfo = false; render(); };
   const courseNotesToggle = document.getElementById('courseNotesToggle');
   if(courseNotesToggle) courseNotesToggle.onclick = () => { ui.courseNotesOpen = !ui.courseNotesOpen; render(); };
+  const courseMaterialsToggle = document.getElementById('courseMaterialsToggle');
+  if(courseMaterialsToggle) courseMaterialsToggle.onclick = () => { ui.courseMaterialsOpen = !ui.courseMaterialsOpen; render(); };
   const courseInfoEditFromViewBtn = document.getElementById('courseInfoEditFromViewBtn');
   if(courseInfoEditFromViewBtn) courseInfoEditFromViewBtn.onclick = () => {
     ui.viewingCourseInfo = false;
     ui.editingCourseInfo = true;
     ui.importantNotesDraft = [...(store.data.courseImportantNotes || [])];
+    ui.materialsDraft = [...(store.data.courseMaterials || [])];
     render();
   };
 
@@ -480,9 +497,27 @@ export function attachChromeEvents(){
     });
   }
 
+  const addMaterialBtn = document.getElementById('addMaterialBtn');
+  if(addMaterialBtn) addMaterialBtn.onclick = () => {
+    syncMaterialsDraft();
+    ui.materialsDraft.push('');
+    render();
+  };
+  document.querySelectorAll('[data-materialdel]').forEach(el => el.onclick = () => {
+    syncMaterialsDraft();
+    ui.materialsDraft.splice(Number(el.getAttribute('data-materialdel')), 1);
+    render();
+  });
+  function syncMaterialsDraft(){
+    document.querySelectorAll('.material-draft-input').forEach(el => {
+      ui.materialsDraft[Number(el.getAttribute('data-materialidx'))] = el.value;
+    });
+  }
+
   const courseInfoSaveBtn = document.getElementById('courseInfoSaveBtn');
   if(courseInfoSaveBtn) courseInfoSaveBtn.onclick = () => {
     syncImportantNotesDraft();
+    syncMaterialsDraft();
     const isAsync = document.getElementById('courseAsyncCheck').checked;
     store.data.courseInfo = {
       professor: document.getElementById('courseProfInput').value.trim(),
@@ -496,7 +531,9 @@ export function attachChromeEvents(){
     };
     store.data.courseNotes = document.getElementById('courseNotesInput').value.trim();
     store.data.courseImportantNotes = ui.importantNotesDraft.map(n => n.trim()).filter(Boolean);
+    store.data.courseMaterials = ui.materialsDraft.map(m => m.trim()).filter(Boolean);
     ui.importantNotesDraft = [];
+    ui.materialsDraft = [];
     ui.editingCourseInfo = false; ui.viewingCourseInfo = true;
     render(); saveData();
   };

@@ -355,7 +355,7 @@
     .home-col-side{ width:220px; flex-shrink:0; }
   }
   @media (min-width: 1300px){
-    .home-col-side{ position:fixed; top:80px; left:32px; width:220px; }
+    .home-col-side{ position:fixed; top:80px; left:32px; width:clamp(220px, calc((100vw - 820px) / 2 - 64px), 400px); }
   }
   .home-tasks-card{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:18px; box-shadow:2px 3px 0 rgba(74,63,49,0.08); }
   .home-tasks-title{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size:16px; margin-bottom:6px; }

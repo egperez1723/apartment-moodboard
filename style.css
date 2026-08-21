@@ -350,7 +350,7 @@
   .home-col-main{ width:100%; min-width:0; }
   .home-col-side{ width:100%; min-width:0; }
   @media (min-width: 700px){
-    .home-columns{ flex-direction:row; }
+    .home-columns{ flex-direction:row-reverse; }
     .home-col-main{ flex:1 1 0; }
     .home-col-side{ width:300px; flex-shrink:0; }
   }

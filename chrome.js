@@ -34,21 +34,10 @@ export function renderHomeScreen(){
     </header>
   `;
 
-  const tasks = getAllHomeTasks();
-  if(tasks.length > 0){
-    const today = new Date().toISOString().slice(0,10);
-    html += `<div class="home-tasks-card">
-      <div class="home-tasks-title">all tasks</div>
-      <ul class="todo-list">
-        ${tasks.map(t => `<li class="todo-item">
-          <span class="home-task-space" data-openspace="${t.spaceId}">${escapeHtml(t.spaceName)}</span>
-          <div class="todo-check" data-hometoggle="${t.spaceId}|${t.id}"></div>
-          <div class="todo-text">${escapeHtml(t.text)}${t.dueDate ? ` <span class="todo-date-badge ${t.dueDate < today ? 'overdue' : ''}">${new Date(t.dueDate+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>` : ''}</div>
-        </li>`).join('')}
-      </ul>
-    </div>`;
-  }
+  html += `<div class="home-columns">`;
 
+  // main column: spaces list
+  html += `<div class="home-col-main">`;
   if(store.spaces.length === 0){
     html += `<div class="empty-hint">no spaces yet — add one below to get started</div>`;
   } else {
@@ -81,6 +70,27 @@ export function renderHomeScreen(){
   html += `<div class="new-cat-row">
     <span class="round-plus" id="addSpaceBtn">+</span><span style="font-size:12px; color:var(--ink-soft);">add a space</span>
   </div>`;
+  html += `</div>`; // end home-col-main
+
+  // side column: all tasks
+  const tasks = getAllHomeTasks();
+  if(tasks.length > 0){
+    const today = new Date().toISOString().slice(0,10);
+    html += `<div class="home-col-side">
+      <div class="home-tasks-card">
+        <div class="home-tasks-title">all tasks</div>
+        <ul class="todo-list">
+          ${tasks.map(t => `<li class="todo-item">
+            <span class="home-task-space" data-openspace="${t.spaceId}">${escapeHtml(t.spaceName)}</span>
+            <div class="todo-check" data-hometoggle="${t.spaceId}|${t.id}"></div>
+            <div class="todo-text">${escapeHtml(t.text)}${t.dueDate ? ` <span class="todo-date-badge ${t.dueDate < today ? 'overdue' : ''}">${new Date(t.dueDate+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>` : ''}</div>
+          </li>`).join('')}
+        </ul>
+      </div>
+    </div>`;
+  }
+
+  html += `</div>`; // end home-columns
 
   if(ui.addingSpace){
     html += `<div class="modal-overlay" id="spaceModalOverlay">

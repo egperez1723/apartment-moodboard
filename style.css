@@ -349,10 +349,13 @@
   .home-columns{ display:flex; flex-direction:column; gap:22px; align-items:flex-start; }
   .home-col-main{ width:100%; min-width:0; }
   .home-col-side{ width:100%; min-width:0; }
-  @media (min-width: 700px){
+  @media (min-width: 700px) and (max-width: 1299px){
     .home-columns{ flex-direction:row-reverse; }
     .home-col-main{ flex:1 1 0; }
-    .home-col-side{ width:300px; flex-shrink:0; }
+    .home-col-side{ width:220px; flex-shrink:0; }
+  }
+  @media (min-width: 1300px){
+    .home-col-side{ position:fixed; top:80px; left:32px; width:220px; }
   }
   .home-tasks-card{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:18px; box-shadow:2px 3px 0 rgba(74,63,49,0.08); }
   .home-tasks-title{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size:16px; margin-bottom:6px; }

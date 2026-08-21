@@ -2,10 +2,28 @@
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
 import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
-  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, moveSpace, computeRunningGrade, computeCourseProgress, computeNextDue,
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, moveSpace, setSpaceArchived, computeRunningGrade, computeCourseProgress, computeNextDue,
   getAllHomeTasks, toggleHomeTask } from './store.js';
 import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON, CALENDAR_ICON } from './shared.js';
 import { render } from './app.js';
+
+function renderSpaceRow(s, isArchived){
+  const featureLabels = ALL_FEATURES.filter(f => (s.features||[]).includes(f.id)).map(f => f.label);
+  return `<div class="space-row ${isArchived ? 'space-row-archived' : ''}" data-openspace="${s.id}">
+    <div class="space-row-main">
+      <div class="space-row-name hand">${escapeHtml(s.name)}</div>
+      <div class="space-row-meta">${featureLabels.length ? featureLabels.join(' · ') : 'mood board only'}</div>
+    </div>
+    ${ui.homeEditMode ? `<div class="cat-edit-actions">
+      ${isArchived
+        ? `<span class="timeline-manage-link" data-unarchivespace="${s.id}">unarchive</span>`
+        : `<span class="cat-move-btn" data-spacemove="${s.id}" data-dir="up">↑</span>
+           <span class="cat-move-btn" data-spacemove="${s.id}" data-dir="down">↓</span>
+           <span class="timeline-manage-link" data-archivespace="${s.id}">archive</span>`}
+      <span class="cat-del-icon" data-delspace="${s.id}">✕</span>
+    </div>` : ''}
+  </div>`;
+}
 
 export function renderHomeScreen(){
   let html = `
@@ -34,23 +52,30 @@ export function renderHomeScreen(){
   if(store.spaces.length === 0){
     html += `<div class="empty-hint">no spaces yet — add one below to get started</div>`;
   } else {
+    const activeSpaces = store.spaces.filter(s => !s.archived);
+    const archivedSpaces = store.spaces.filter(s => s.archived);
+
     html += `<div class="cat-edit-row"><span class="cat-edit-toggle" id="homeEditToggle">${ui.homeEditMode ? CHECK_ICON : PENCIL_ICON}</span></div>`;
-    html += `<div class="space-list">`;
-    store.spaces.forEach(s => {
-      const featureLabels = ALL_FEATURES.filter(f => (s.features||[]).includes(f.id)).map(f => f.label);
-      html += `<div class="space-row" data-openspace="${s.id}">
-        <div class="space-row-main">
-          <div class="space-row-name hand">${escapeHtml(s.name)}</div>
-          <div class="space-row-meta">${featureLabels.length ? featureLabels.join(' · ') : 'mood board only'}</div>
-        </div>
-        ${ui.homeEditMode ? `<div class="cat-edit-actions">
-          <span class="cat-move-btn" data-spacemove="${s.id}" data-dir="up">↑</span>
-          <span class="cat-move-btn" data-spacemove="${s.id}" data-dir="down">↓</span>
-          <span class="cat-del-icon" data-delspace="${s.id}">✕</span>
-        </div>` : ''}
+
+    if(activeSpaces.length === 0){
+      html += `<div class="empty-hint">all spaces are archived — unarchive one below, or add a new space</div>`;
+    } else {
+      html += `<div class="space-list">`;
+      activeSpaces.forEach(s => { html += renderSpaceRow(s, false); });
+      html += `</div>`;
+    }
+
+    if(archivedSpaces.length > 0){
+      html += `<div class="archived-toggle-row" id="archivedToggle">
+        <span>${archivedSpaces.length} archived space${archivedSpaces.length===1?'':'s'}</span>
+        <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.showArchived ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
       </div>`;
-    });
-    html += `</div>`;
+      if(ui.showArchived){
+        html += `<div class="space-list">`;
+        archivedSpaces.forEach(s => { html += renderSpaceRow(s, true); });
+        html += `</div>`;
+      }
+    }
   }
 
   html += `<div class="new-cat-row">
@@ -86,8 +111,11 @@ export function attachHomeEvents(){
   const homeEditToggle = document.getElementById('homeEditToggle');
   if(homeEditToggle) homeEditToggle.onclick = () => { ui.homeEditMode = !ui.homeEditMode; render(); };
 
+  const archivedToggle = document.getElementById('archivedToggle');
+  if(archivedToggle) archivedToggle.onclick = () => { ui.showArchived = !ui.showArchived; render(); };
+
   document.querySelectorAll('[data-openspace]').forEach(el => el.onclick = (e) => {
-    if(e.target.closest('[data-delspace], [data-spacemove]')) return;
+    if(e.target.closest('[data-delspace], [data-spacemove], [data-archivespace], [data-unarchivespace]')) return;
     openSpace(el.getAttribute('data-openspace'));
   });
   document.querySelectorAll('[data-delspace]').forEach(el => el.onclick = (e) => {
@@ -97,6 +125,14 @@ export function attachHomeEvents(){
   document.querySelectorAll('[data-spacemove]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();
     moveSpace(el.getAttribute('data-spacemove'), el.getAttribute('data-dir'));
+  });
+  document.querySelectorAll('[data-archivespace]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    setSpaceArchived(el.getAttribute('data-archivespace'), true);
+  });
+  document.querySelectorAll('[data-unarchivespace]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    setSpaceArchived(el.getAttribute('data-unarchivespace'), false);
   });
 
   const addSpaceBtn = document.getElementById('addSpaceBtn');

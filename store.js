@@ -75,6 +75,7 @@ export const ui = {
   addingSpace: false,
   newSpaceFeatures: new Set(),
   homeEditMode: false,
+  showArchived: false,
   spaceSettingsOpen: false,
   assignmentModalOpen: false,
   assignmentDraft: null,
@@ -210,7 +211,7 @@ function subscribeSpacesIndex(){
 
   if(unsubscribeIndex) unsubscribeIndex();
   unsubscribeIndex = spacesCol.onSnapshot((snap) => {
-    store.spaces = snap.docs.map((d, i) => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [], order: d.data().order !== undefined ? d.data().order : 10000 + i }));
+    store.spaces = snap.docs.map((d, i) => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [], order: d.data().order !== undefined ? d.data().order : 10000 + i, archived: !!d.data().archived }));
     store.spaces.sort((a, b) => a.order - b.order);
     snap.docs.forEach(d => {
       // currently-open space already has the freshest data in store.data, so
@@ -231,6 +232,7 @@ function subscribeSpacesIndex(){
 export function getAllHomeTasks(){
   const tasks = [];
   store.spaces.forEach(s => {
+    if(s.archived) return;
     if(!(s.features || []).includes('todo')) return;
     const cached = spaceDataCache[s.id];
     if(!cached || !cached.todoList) return;
@@ -345,6 +347,14 @@ export async function moveSpace(id, dir){
     store.spaces.forEach((s, i) => { s.order = i; batch.set(spacesCol.doc(s.id), { order: i }, { merge: true }); });
     await batch.commit();
   }catch(e){ console.error('reorder spaces failed', e); }
+}
+
+export async function setSpaceArchived(id, archived){
+  const s = store.spaces.find(x => x.id === id);
+  if(s) s.archived = archived;
+  render();
+  try{ await spacesCol.doc(id).set({ archived }, { merge: true }); }
+  catch(e){ console.error('archive toggle failed', e); }
 }
 
 export async function renameSpace(name){

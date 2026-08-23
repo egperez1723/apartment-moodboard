@@ -237,6 +237,9 @@
   .card-due{ font-size:10px; color:var(--ink-soft); text-align:center; margin-top:2px; }
   .modal-price-input{ width:100%; font-family:'Work Sans', sans-serif; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--cream); margin:8px 0 4px 0; }
   .course-field-row{ display:flex; gap:6px; align-items:center; }
+  .move-cat-row{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .move-cat-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0; }
+  .move-cat-row select{ margin-bottom:0; }
   .card-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); }
   .expand-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:var(--cream); color:var(--ink-soft); display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .item-done-btn{ width:32px; height:32px; border-radius:50%; background:var(--sage-dark); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }

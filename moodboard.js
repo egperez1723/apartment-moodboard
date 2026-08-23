@@ -201,6 +201,12 @@ export function renderMoodBoard(){
             <span style="align-self:center; color:var(--ink-soft); font-size:13px;">/</span>
             <input type="number" inputmode="numeric" class="modal-price-input" id="itemViewMaxScoreInput" placeholder="out of" maxlength="6" value="${openItem.maxScore !== undefined && openItem.maxScore !== null ? openItem.maxScore : ''}" data-item="${openItem.id}" data-cat="${openCat.id}" style="width:70px;" />
           </div>` : ''}
+          ${store.data.categories.length > 1 ? `<div class="move-cat-row">
+            <span class="move-cat-label">move to</span>
+            <select id="itemMoveCatSelect" data-item="${openItem.id}" data-cat="${openCat.id}">
+              ${store.data.categories.map(c => `<option value="${c.id}" ${c.id === openCat.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+            </select>
+          </div>` : ''}
 
           <div class="modal-section-label">sub-items</div>
           ${subs.length > 0 ? `<ul class="subitems">
@@ -512,6 +518,24 @@ export function attachMoodboardEvents(){
       const {item} = findGroup(itemViewMaxScoreInput.getAttribute('data-cat'), itemViewMaxScoreInput.getAttribute('data-item'));
       if(item){ const v = itemViewMaxScoreInput.value.trim(); item.maxScore = v ? Number(v) : null; saveData(); }
     });
+  }
+
+  const itemMoveCatSelect = document.getElementById('itemMoveCatSelect');
+  if(itemMoveCatSelect){
+    itemMoveCatSelect.onchange = () => {
+      const fromCatId = itemMoveCatSelect.getAttribute('data-cat');
+      const itemId = itemMoveCatSelect.getAttribute('data-item');
+      const toCatId = itemMoveCatSelect.value;
+      if(toCatId === fromCatId) return;
+      const fromCat = store.data.categories.find(c => c.id === fromCatId);
+      const toCat = store.data.categories.find(c => c.id === toCatId);
+      if(!fromCat || !toCat) return;
+      const idx = fromCat.items.findIndex(i => i.id === itemId);
+      if(idx === -1) return;
+      const [moved] = fromCat.items.splice(idx, 1);
+      toCat.items.push(moved);
+      render(); saveData();
+    };
   }
 
 

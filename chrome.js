@@ -441,7 +441,7 @@ export function renderCourseInfoCard(){
             <span class="index-card-editbtn" id="instructionsEditFromViewBtn">${PENCIL_ICON}</span>
           </div>
           <div class="index-card-body">
-            <div class="index-card-notes-body" style="margin-top:0;">${escapeHtml(instructions)}</div>
+            <div class="index-card-notes-body instructions-formatted" style="margin-top:0;">${formatInstructionsHtml(instructions)}</div>
           </div>
         </div>
       </div>
@@ -450,6 +450,34 @@ export function renderCourseInfoCard(){
 
   return html;
 }
+// Turns plain text with numbered ("1. ") or bulleted ("- " / "* " / "• ")
+// lines into real <ol>/<ul> markup, so pasted instructions actually read
+// like a list instead of flat text. Blank lines break up paragraphs/lists.
+function formatInstructionsHtml(text){
+  const lines = text.split('\n');
+  let html = '';
+  let listType = null; // 'ol' | 'ul' | null
+  const closeList = () => { if(listType){ html += `</${listType}>`; listType = null; } };
+  lines.forEach(rawLine => {
+    const line = rawLine.trim();
+    if(!line){ closeList(); return; }
+    const numbered = line.match(/^\d+[\.\)]\s+(.*)/);
+    const bulleted = line.match(/^[-*•]\s+(.*)/);
+    if(numbered){
+      if(listType !== 'ol'){ closeList(); html += '<ol>'; listType = 'ol'; }
+      html += `<li>${escapeHtml(numbered[1])}</li>`;
+    } else if(bulleted){
+      if(listType !== 'ul'){ closeList(); html += '<ul>'; listType = 'ul'; }
+      html += `<li>${escapeHtml(bulleted[1])}</li>`;
+    } else {
+      closeList();
+      html += `<p>${escapeHtml(line)}</p>`;
+    }
+  });
+  closeList();
+  return html;
+}
+
 function formatTime12(t){
   if(!t) return '';
   const [h, m] = t.split(':').map(Number);

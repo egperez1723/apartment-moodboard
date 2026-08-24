@@ -345,6 +345,7 @@ export function renderCourseInfoCard(){
     if(ci.officeHours) rows.push(['office hrs', ci.officeHours]);
 
     const notes = store.data.courseNotes || '';
+    const instructions = store.data.courseInstructions || '';
     const materials = store.data.courseMaterials || [];
 
     html += `<div class="modal-overlay" id="courseInfoViewOverlay">
@@ -357,6 +358,11 @@ export function renderCourseInfoCard(){
           </div>
           <div class="index-card-body">
             ${rows.length === 0 ? `<div class="info-empty">nothing added yet — tap the pencil to fill it in</div>` : rows.map(([label,val]) => `<div class="index-card-row"><span class="index-card-label">${escapeHtml(label)}</span><span class="index-card-value">${escapeHtml(val)}${label==='email' ? ` <span class="info-copy-btn" data-copyval="${escapeHtml(val)}" title="copy email" style="display:inline-flex; vertical-align:middle; margin-left:4px;">${COPY_ICON}</span>` : ''}</span></div>`).join('')}
+            ${instructions ? `<div class="index-card-notes-toggle" id="courseInstructionsToggle">
+              <span>weekly instructions</span>
+              <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseInstructionsOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
+            </div>
+            ${ui.courseInstructionsOpen ? `<div class="index-card-notes-body">${escapeHtml(instructions)}</div>` : ''}` : ''}
             ${materials.length > 0 ? `<div class="index-card-notes-toggle" id="courseMaterialsToggle">
               <span>materials</span>
               <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseMaterialsOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
@@ -415,6 +421,8 @@ export function renderCourseInfoCard(){
           </div>`).join('')}
         </div>
         <div class="timeline-manage-link" id="addMaterialBtn" style="display:inline-block; margin-bottom:14px; cursor:pointer;">+ add another material</div>
+        <div class="info-field-label">weekly instructions</div>
+        <textarea class="notes-area" id="courseInstructionsInput" placeholder="e.g. steps to follow each week for discussion posts..." style="min-height:80px;">${escapeHtml(store.data.courseInstructions || '')}</textarea>
         <div class="info-field-label">notes</div>
         <textarea class="notes-area" id="courseNotesInput" placeholder="e.g. no final for this class, or grades on a curve...">${escapeHtml(store.data.courseNotes || '')}</textarea>
         <div class="modal-actions" style="margin-top:14px;">
@@ -490,6 +498,8 @@ export function attachChromeEvents(){
   if(courseInfoViewCloseBtn) courseInfoViewCloseBtn.onclick = () => { ui.viewingCourseInfo = false; render(); };
   const courseNotesToggle = document.getElementById('courseNotesToggle');
   if(courseNotesToggle) courseNotesToggle.onclick = () => { ui.courseNotesOpen = !ui.courseNotesOpen; render(); };
+  const courseInstructionsToggle = document.getElementById('courseInstructionsToggle');
+  if(courseInstructionsToggle) courseInstructionsToggle.onclick = () => { ui.courseInstructionsOpen = !ui.courseInstructionsOpen; render(); };
   const courseMaterialsToggle = document.getElementById('courseMaterialsToggle');
   if(courseMaterialsToggle) courseMaterialsToggle.onclick = () => { ui.courseMaterialsOpen = !ui.courseMaterialsOpen; render(); };
   const courseInfoEditFromViewBtn = document.getElementById('courseInfoEditFromViewBtn');
@@ -576,6 +586,7 @@ export function attachChromeEvents(){
       officeHours: document.getElementById('courseOfficeInput').value.trim()
     };
     store.data.courseNotes = document.getElementById('courseNotesInput').value.trim();
+    store.data.courseInstructions = document.getElementById('courseInstructionsInput').value.trim();
     store.data.courseImportantNotes = ui.importantNotesDraft.map(n => n.trim()).filter(Boolean);
     store.data.courseMaterials = ui.materialsDraft.map(m => m.trim()).filter(Boolean);
     ui.importantNotesDraft = [];

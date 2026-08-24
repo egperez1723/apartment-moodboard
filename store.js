@@ -61,6 +61,7 @@ export const ui = {
   viewingCourseInfo: false,
   editingCourseInfo: false,
   courseNotesOpen: false,
+  courseInstructionsOpen: false,
   courseMaterialsOpen: false,
   importantNotesDraft: [],
   materialsDraft: [],
@@ -97,6 +98,7 @@ export function defaultState(name){
     categoryWeights: {},
     categoryNotes: {},
     courseNotes: '',
+    courseInstructions: '',
     courseImportantNotes: [],
     courseMaterials: []
   };
@@ -124,6 +126,7 @@ export function normalizeState(){
   if(!store.data.categoryWeights) store.data.categoryWeights = {};
   if(!store.data.categoryNotes) store.data.categoryNotes = {};
   if(store.data.courseNotes === undefined) store.data.courseNotes = '';
+  if(store.data.courseInstructions === undefined) store.data.courseInstructions = '';
   if(!store.data.courseImportantNotes) store.data.courseImportantNotes = [];
   if(!store.data.courseMaterials) store.data.courseMaterials = [];
   // migrate the old single-string field, if it's still hanging around

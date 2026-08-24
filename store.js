@@ -77,6 +77,7 @@ export const ui = {
   newSpaceFeatures: new Set(),
   homeEditMode: false,
   showArchived: false,
+  viewingInstructions: false,
   spaceSettingsOpen: false,
   assignmentModalOpen: false,
   assignmentDraft: null,

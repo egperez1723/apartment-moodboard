@@ -322,10 +322,14 @@ export function renderCourseInfoCard(){
   const importantNotes = store.data.courseImportantNotes || [];
   const importantBadges = importantNotes.map(n => `<div class="important-note-badge" data-openinfobtn="1">${WARNING_ICON()} ${escapeHtml(n)}</div>`).join('');
 
+  const instructions = store.data.courseInstructions || '';
+  const instructionsBadge = instructions ? `<div class="instructions-badge" data-openinstructions="1">${CLIPBOARD_ICON()} weekly instructions</div>` : '';
+
   let html = `<div class="quick-access-row">
     <span class="quick-access-btn" id="courseInfoOpenBtn">${CARD_ICON} course info</span>
     ${nextDueBadge}
   </div>
+  ${instructionsBadge}
   ${importantBadges}`;
 
   if(ui.viewingCourseInfo){
@@ -345,7 +349,6 @@ export function renderCourseInfoCard(){
     if(ci.officeHours) rows.push(['office hrs', ci.officeHours]);
 
     const notes = store.data.courseNotes || '';
-    const instructions = store.data.courseInstructions || '';
     const materials = store.data.courseMaterials || [];
 
     html += `<div class="modal-overlay" id="courseInfoViewOverlay">
@@ -358,11 +361,6 @@ export function renderCourseInfoCard(){
           </div>
           <div class="index-card-body">
             ${rows.length === 0 ? `<div class="info-empty">nothing added yet — tap the pencil to fill it in</div>` : rows.map(([label,val]) => `<div class="index-card-row"><span class="index-card-label">${escapeHtml(label)}</span><span class="index-card-value">${escapeHtml(val)}${label==='email' ? ` <span class="info-copy-btn" data-copyval="${escapeHtml(val)}" title="copy email" style="display:inline-flex; vertical-align:middle; margin-left:4px;">${COPY_ICON}</span>` : ''}</span></div>`).join('')}
-            ${instructions ? `<div class="index-card-notes-toggle" id="courseInstructionsToggle">
-              <span>weekly instructions</span>
-              <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseInstructionsOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
-            </div>
-            ${ui.courseInstructionsOpen ? `<div class="index-card-notes-body">${escapeHtml(instructions)}</div>` : ''}` : ''}
             ${materials.length > 0 ? `<div class="index-card-notes-toggle" id="courseMaterialsToggle">
               <span>materials</span>
               <span class="expand-btn" style="width:18px; height:18px; background:var(--cream);">${ui.courseMaterialsOpen ? CHEVRON_UP() : CHEVRON_DOWN()}</span>
@@ -433,6 +431,23 @@ export function renderCourseInfoCard(){
     </div>`;
   }
 
+  if(ui.viewingInstructions){
+    html += `<div class="modal-overlay" id="instructionsViewOverlay">
+      <div class="modal-box" style="padding:0; max-width:320px; background:transparent; box-shadow:none;">
+        <div class="modal-closerow"><span class="expand-btn" id="instructionsViewCloseBtn" style="background:var(--paper);">${COLLAPSE_ICON}</span></div>
+        <div class="index-card">
+          <div class="index-card-band">
+            <span>weekly instructions</span>
+            <span class="index-card-editbtn" id="instructionsEditFromViewBtn">${PENCIL_ICON}</span>
+          </div>
+          <div class="index-card-body">
+            <div class="index-card-notes-body" style="margin-top:0;">${escapeHtml(instructions)}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   return html;
 }
 function formatTime12(t){
@@ -443,6 +458,7 @@ function formatTime12(t){
   return `${h12}:${String(m).padStart(2,'0')}${ampm}`;
 }
 function WARNING_ICON(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`; }
+function CLIPBOARD_ICON(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="flex-shrink:0;"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/></svg>`; }
 function CHEVRON_UP(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M18 15l-6-6-6 6"/></svg>`; }
 function CHEVRON_DOWN(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M6 9l6 6 6-6"/></svg>`; }
 
@@ -491,6 +507,19 @@ export function attachChromeEvents(){
   const courseInfoOpenBtn = document.getElementById('courseInfoOpenBtn');
   if(courseInfoOpenBtn) courseInfoOpenBtn.onclick = () => { ui.viewingCourseInfo = true; render(); };
   document.querySelectorAll('[data-openinfobtn]').forEach(el => el.onclick = () => { ui.viewingCourseInfo = true; render(); });
+  document.querySelectorAll('[data-openinstructions]').forEach(el => el.onclick = () => { ui.viewingInstructions = true; render(); });
+  const instructionsViewOverlay = document.getElementById('instructionsViewOverlay');
+  if(instructionsViewOverlay) instructionsViewOverlay.addEventListener('click', (e) => { if(e.target === instructionsViewOverlay){ ui.viewingInstructions = false; render(); } });
+  const instructionsViewCloseBtn = document.getElementById('instructionsViewCloseBtn');
+  if(instructionsViewCloseBtn) instructionsViewCloseBtn.onclick = () => { ui.viewingInstructions = false; render(); };
+  const instructionsEditFromViewBtn = document.getElementById('instructionsEditFromViewBtn');
+  if(instructionsEditFromViewBtn) instructionsEditFromViewBtn.onclick = () => {
+    ui.viewingInstructions = false;
+    ui.editingCourseInfo = true;
+    ui.importantNotesDraft = [...(store.data.courseImportantNotes || [])];
+    ui.materialsDraft = [...(store.data.courseMaterials || [])];
+    render();
+  };
 
   const courseInfoViewOverlay = document.getElementById('courseInfoViewOverlay');
   if(courseInfoViewOverlay) courseInfoViewOverlay.addEventListener('click', (e) => { if(e.target === courseInfoViewOverlay){ ui.viewingCourseInfo = false; render(); } });

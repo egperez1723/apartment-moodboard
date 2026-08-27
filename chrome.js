@@ -2,14 +2,17 @@
 // (backup/restore/reset). Small, mostly self-contained UI pieces.
 
 import { store, ui, saveLocalBackup, getNewestLocalBackup, resetAll, saveData, normalizeState,
-  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, moveSpace, setSpaceArchived, computeRunningGrade, computeCourseProgress, computeNextDue,
+  ALL_FEATURES, openSpace, createSpace, deleteSpace, toggleFeature, moveSpace, setSpaceArchived, setSpaceIcon, setSpaceAccent, computeRunningGrade, computeCourseProgress, computeNextDue,
   getAllHomeTasks, toggleHomeTask } from './store.js';
-import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON, CALENDAR_ICON } from './shared.js';
+import { escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, CHECK_ICON, COPY_ICON, RECEIPT_ICON, CARD_ICON, CALENDAR_ICON,
+  SPACE_ICON_IDS, SPACE_ACCENT_IDS, spaceIconSvg } from './shared.js';
 import { render } from './app.js';
 
 function renderSpaceRow(s, isArchived){
   const featureLabels = ALL_FEATURES.filter(f => (s.features||[]).includes(f.id)).map(f => f.label);
-  return `<div class="space-row ${isArchived ? 'space-row-archived' : ''}" data-openspace="${s.id}">
+  const accent = s.accent || 'terracotta';
+  return `<div class="space-row accent-${accent} ${isArchived ? 'space-row-archived' : ''}" data-openspace="${s.id}">
+    <div class="space-row-icon icon-${accent}">${spaceIconSvg(s.icon || 'pin')}</div>
     <div class="space-row-main">
       <div class="space-row-name hand">${escapeHtml(s.name)}</div>
       <div class="space-row-meta">${featureLabels.length ? featureLabels.join(' · ') : 'mood board only'}</div>
@@ -22,6 +25,22 @@ function renderSpaceRow(s, isArchived){
            <span class="timeline-manage-link" data-archivespace="${s.id}">archive</span>`}
       <span class="cat-del-icon" data-delspace="${s.id}">✕</span>
     </div>` : ''}
+  </div>`;
+}
+
+// Icon/accent picker grid, reused in both the "new space" modal and the
+// per-space settings footer. `prefix` namespaces the data attributes so
+// the two instances don't collide when both happen to be open at once.
+function renderIconAccentPicker(prefix, selectedIcon, selectedAccent){
+  return `<div class="icon-accent-picker">
+    <div class="icon-picker-label">icon</div>
+    <div class="icon-picker-grid">
+      ${SPACE_ICON_IDS.map(id => `<span class="icon-pick-swatch icon-${selectedAccent} ${id === selectedIcon ? 'icon-pick-selected' : ''}" data-${prefix}iconpick="${id}">${spaceIconSvg(id)}</span>`).join('')}
+    </div>
+    <div class="icon-picker-label">color</div>
+    <div class="icon-picker-grid">
+      ${SPACE_ACCENT_IDS.map(id => `<span class="color-pick-swatch color-${id} ${id === selectedAccent ? 'icon-pick-selected' : ''}" data-${prefix}colorpick="${id}"></span>`).join('')}
+    </div>
   </div>`;
 }
 
@@ -78,10 +97,12 @@ export function renderHomeScreen(){
     const today = new Date().toISOString().slice(0,10);
     html += `<div class="home-col-side">
       <div class="home-tasks-card">
+        <div class="home-tasks-pin"></div>
+        <div class="home-tasks-tape"></div>
         <div class="home-tasks-title">all tasks</div>
         <ul class="todo-list">
-          ${tasks.map(t => `<li class="todo-item">
-            <span class="home-task-space" data-openspace="${t.spaceId}">${escapeHtml(t.spaceName)}</span>
+          ${tasks.map(t => `<li class="todo-item todo-item-wrap">
+            <span class="home-task-space" data-openspace="${t.spaceId}" title="${escapeHtml(t.spaceName)}">${escapeHtml(t.spaceName)}</span>
             <div class="todo-check" data-hometoggle="${t.spaceId}|${t.id}"></div>
             <div class="todo-text">${escapeHtml(t.text)}${t.dueDate ? ` <span class="todo-date-badge ${t.dueDate < today ? 'overdue' : ''}">${new Date(t.dueDate+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>` : ''}</div>
           </li>`).join('')}
@@ -98,6 +119,7 @@ export function renderHomeScreen(){
         <div class="modal-closerow"><span class="expand-btn" id="spaceCloseBtn">${COLLAPSE_ICON}</span></div>
         <div class="modal-title">New space</div>
         <input type="text" id="newSpaceInput" placeholder="e.g. CS 301" maxlength="30" />
+        ${renderIconAccentPicker('new', ui.newSpaceIcon || 'pin', ui.newSpaceAccent || 'terracotta')}
         <div class="feature-check-group">
           ${ALL_FEATURES.map(f => `<label class="feature-check"><input type="checkbox" data-featurecheck="${f.id}" ${ui.newSpaceFeatures.has(f.id) ? 'checked' : ''}/> ${f.label}</label>`).join('')}
         </div>
@@ -159,13 +181,24 @@ export function attachHomeEvents(){
     if(el.checked) ui.newSpaceFeatures.add(id); else ui.newSpaceFeatures.delete(id);
   });
 
+  document.querySelectorAll('[data-newiconpick]').forEach(el => el.onclick = () => {
+    ui.newSpaceIcon = el.getAttribute('data-newiconpick');
+    render();
+  });
+  document.querySelectorAll('[data-newcolorpick]').forEach(el => el.onclick = () => {
+    ui.newSpaceAccent = el.getAttribute('data-newcolorpick');
+    render();
+  });
+
   const spaceAddBtn = document.getElementById('spaceAddBtn');
   if(spaceAddBtn) spaceAddBtn.onclick = () => {
     const input = document.getElementById('newSpaceInput');
     const name = input ? input.value : '';
     if(!name.trim()){ input && input.focus(); return; }
     ui.addingSpace = false;
-    createSpace(name, Array.from(ui.newSpaceFeatures));
+    createSpace(name, Array.from(ui.newSpaceFeatures), ui.newSpaceIcon, ui.newSpaceAccent);
+    ui.newSpaceIcon = 'pin';
+    ui.newSpaceAccent = 'terracotta';
   };
   const newSpaceInput = document.getElementById('newSpaceInput');
   if(newSpaceInput){
@@ -513,13 +546,15 @@ export function renderSyllabusCard(){
 export function renderFooter(){
   const backup = getNewestLocalBackup();
   const backupAge = backup ? new Date(backup.when).toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : null;
+  const currentSpace = store.spaces.find(s => s.id === store.currentSpaceId);
   return `<footer>
     <div class="backup-row">
       <span class="backup-link" id="spaceSettingsLink">${ui.spaceSettingsOpen ? 'hide space settings' : 'space settings'}</span>
     </div>
     ${ui.spaceSettingsOpen ? `<div class="feature-check-group feature-check-group-footer">
       ${ALL_FEATURES.map(f => `<label class="feature-check"><input type="checkbox" data-featuretoggle="${f.id}" ${store.features.includes(f.id) ? 'checked' : ''}/> ${f.label}</label>`).join('')}
-    </div>` : ''}
+    </div>
+    ${currentSpace ? renderIconAccentPicker('cur', currentSpace.icon || 'pin', currentSpace.accent || 'terracotta') : ''}` : ''}
     <div class="backup-row">
       <span class="backup-link" id="backupLink">backup board</span>
       <span class="backup-link" id="restoreLink">restore from backup</span>
@@ -772,5 +807,11 @@ export function attachChromeEvents(){
   if(spaceSettingsLink) spaceSettingsLink.onclick = () => { ui.spaceSettingsOpen = !ui.spaceSettingsOpen; render(); };
   document.querySelectorAll('[data-featuretoggle]').forEach(el => el.onchange = () => {
     toggleFeature(el.getAttribute('data-featuretoggle'));
+  });
+  document.querySelectorAll('[data-curiconpick]').forEach(el => el.onclick = () => {
+    if(store.currentSpaceId) setSpaceIcon(store.currentSpaceId, el.getAttribute('data-curiconpick'));
+  });
+  document.querySelectorAll('[data-curcolorpick]').forEach(el => el.onclick = () => {
+    if(store.currentSpaceId) setSpaceAccent(store.currentSpaceId, el.getAttribute('data-curcolorpick'));
   });
 }

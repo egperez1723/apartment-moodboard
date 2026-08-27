@@ -75,6 +75,8 @@ export const ui = {
   modalAddingLink: false,
   addingSpace: false,
   newSpaceFeatures: new Set(),
+  newSpaceIcon: 'pin',
+  newSpaceAccent: 'terracotta',
   homeEditMode: false,
   showArchived: false,
   viewingInstructions: false,
@@ -215,7 +217,7 @@ function subscribeSpacesIndex(){
 
   if(unsubscribeIndex) unsubscribeIndex();
   unsubscribeIndex = spacesCol.onSnapshot((snap) => {
-    store.spaces = snap.docs.map((d, i) => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [], order: d.data().order !== undefined ? d.data().order : 10000 + i, archived: !!d.data().archived }));
+    store.spaces = snap.docs.map((d, i) => ({ id: d.id, name: d.data().name || 'untitled', features: d.data().features || [], order: d.data().order !== undefined ? d.data().order : 10000 + i, archived: !!d.data().archived, icon: d.data().icon || 'pin', accent: d.data().accent || 'terracotta' }));
     store.spaces.sort((a, b) => a.order - b.order);
     snap.docs.forEach(d => {
       // currently-open space already has the freshest data in store.data, so
@@ -325,19 +327,35 @@ export function goHome(){
   render();
 }
 
-export async function createSpace(name, features){
+export async function createSpace(name, features, icon, accent){
   const cleanName = (name || '').trim() || 'untitled space';
   const id = uid();
   const state = defaultState(cleanName);
   const maxOrder = store.spaces.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
   try{
-    await spacesCol.doc(id).set({ name: cleanName, features: features || [], order: maxOrder + 1, state: JSON.stringify(state) });
+    await spacesCol.doc(id).set({ name: cleanName, features: features || [], order: maxOrder + 1, state: JSON.stringify(state), icon: icon || 'pin', accent: accent || 'terracotta' });
   }catch(e){
     console.error('create space failed', e);
     alert('Could not create that space — check your connection and try again.');
     return;
   }
   openSpace(id);
+}
+
+export async function setSpaceIcon(id, icon){
+  const s = store.spaces.find(x => x.id === id);
+  if(s) s.icon = icon;
+  render();
+  try{ await spacesCol.doc(id).set({ icon }, { merge: true }); }
+  catch(e){ console.error('icon update failed', e); }
+}
+
+export async function setSpaceAccent(id, accent){
+  const s = store.spaces.find(x => x.id === id);
+  if(s) s.accent = accent;
+  render();
+  try{ await spacesCol.doc(id).set({ accent }, { merge: true }); }
+  catch(e){ console.error('accent update failed', e); }
 }
 
 export async function moveSpace(id, dir){

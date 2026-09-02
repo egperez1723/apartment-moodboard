@@ -39,7 +39,14 @@ export const SPACE_ICONS = {
   calculator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><rect x="7.5" y="5.5" width="9" height="4" rx="0.5"/><path d="M7.5 13.5h.01M12 13.5h.01M16.5 13.5h.01M7.5 17h.01M12 17h.01M16.5 17h.01"/></svg>`
 };
 export const SPACE_ICON_IDS = Object.keys(SPACE_ICONS);
-export function spaceIconSvg(id){ return SPACE_ICONS[id] || SPACE_ICONS.pin; }
+// A space's `icon` field is either one of the preset ids above, or any
+// other string (an emoji, typically) that gets rendered as literal text
+// instead of an SVG symbol.
+export function spaceIconSvg(id){
+  if(!id) return SPACE_ICONS.pin;
+  if(SPACE_ICONS[id]) return SPACE_ICONS[id];
+  return `<span class="space-icon-emoji">${id}</span>`;
+}
 
 // Accent color options for a space's icon chip + card border. Keys map to
 // CSS vars so the palette stays in one place (style.css :root).

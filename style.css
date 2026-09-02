@@ -403,6 +403,10 @@
   .icon-pick-swatch.icon-sage{ background:var(--sage-soft); color:#5c6e49; }
   .icon-pick-swatch.icon-plum{ background:var(--plum-soft); color:#5c4675; }
   .icon-pick-swatch.icon-pick-selected{ border-color:var(--ink); }
+  .icon-pick-emoji-swatch{ font-size:16px; }
+  .emoji-pick-input{ width:100%; max-width:220px; margin-top:8px; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--paper); font-family:'Work Sans', sans-serif; font-size:14px; }
+  .space-icon-emoji{ font-size:17px; line-height:1; }
+  .icon-pick-swatch .space-icon-emoji{ font-size:16px; }
   .color-pick-swatch{ width:28px; height:28px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
   .color-pick-swatch.color-terracotta{ background:var(--terracotta); }
   .color-pick-swatch.color-sage{ background:var(--sage-dark); }

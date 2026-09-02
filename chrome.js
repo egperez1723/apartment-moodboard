@@ -32,11 +32,14 @@ function renderSpaceRow(s, isArchived){
 // per-space settings footer. `prefix` namespaces the data attributes so
 // the two instances don't collide when both happen to be open at once.
 function renderIconAccentPicker(prefix, selectedIcon, selectedAccent){
+  const isCustomEmoji = selectedIcon && !SPACE_ICON_IDS.includes(selectedIcon);
   return `<div class="icon-accent-picker">
     <div class="icon-picker-label">icon</div>
     <div class="icon-picker-grid">
       ${SPACE_ICON_IDS.map(id => `<span class="icon-pick-swatch icon-${selectedAccent} ${id === selectedIcon ? 'icon-pick-selected' : ''}" data-${prefix}iconpick="${id}">${spaceIconSvg(id)}</span>`).join('')}
+      <span class="icon-pick-swatch icon-${selectedAccent} icon-pick-emoji-swatch ${isCustomEmoji ? 'icon-pick-selected' : ''}">${isCustomEmoji ? escapeHtml(selectedIcon) : '?'}</span>
     </div>
+    <input type="text" class="emoji-pick-input" id="${prefix}EmojiInput" placeholder="or type any emoji" maxlength="4" value="${isCustomEmoji ? escapeHtml(selectedIcon) : ''}" data-${prefix}emojiinput />
     <div class="icon-picker-label">color</div>
     <div class="icon-picker-grid">
       ${SPACE_ACCENT_IDS.map(id => `<span class="color-pick-swatch color-${id} ${id === selectedAccent ? 'icon-pick-selected' : ''}" data-${prefix}colorpick="${id}"></span>`).join('')}
@@ -189,6 +192,16 @@ export function attachHomeEvents(){
     ui.newSpaceAccent = el.getAttribute('data-newcolorpick');
     render();
   });
+  const newEmojiInput = document.getElementById('newEmojiInput');
+  if(newEmojiInput){
+    newEmojiInput.oninput = () => {
+      const v = newEmojiInput.value.trim();
+      if(v) ui.newSpaceIcon = v;
+    };
+    newEmojiInput.onclick = (e) => e.stopPropagation();
+  }
+  const newEmojiSwatch = document.querySelector('.icon-pick-emoji-swatch');
+  if(newEmojiSwatch && document.getElementById('newEmojiInput')) newEmojiSwatch.onclick = () => document.getElementById('newEmojiInput').focus();
 
   const spaceAddBtn = document.getElementById('spaceAddBtn');
   if(spaceAddBtn) spaceAddBtn.onclick = () => {
@@ -814,4 +827,16 @@ export function attachChromeEvents(){
   document.querySelectorAll('[data-curcolorpick]').forEach(el => el.onclick = () => {
     if(store.currentSpaceId) setSpaceAccent(store.currentSpaceId, el.getAttribute('data-curcolorpick'));
   });
+  const curEmojiInput = document.getElementById('curEmojiInput');
+  if(curEmojiInput){
+    curEmojiInput.onclick = (e) => e.stopPropagation();
+    const commitEmoji = () => {
+      const v = curEmojiInput.value.trim();
+      if(v && store.currentSpaceId) setSpaceIcon(store.currentSpaceId, v);
+    };
+    curEmojiInput.onchange = commitEmoji;
+    curEmojiInput.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ curEmojiInput.blur(); } });
+  }
+  const curEmojiSwatch = document.querySelector('.icon-pick-emoji-swatch');
+  if(curEmojiSwatch && document.getElementById('curEmojiInput')) curEmojiSwatch.onclick = () => document.getElementById('curEmojiInput').focus();
 }

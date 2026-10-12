@@ -34,7 +34,8 @@ export const ALL_FEATURES = [
   { id: 'shopping', label: 'shopping list' },
   { id: 'todo', label: 'stuff to do' },
   { id: 'info', label: 'info card' },
-  { id: 'course', label: 'course tracker (syllabus + assignments)' }
+  { id: 'course', label: 'course tracker (syllabus + assignments)' },
+  { id: 'costumes', label: 'costume planner (costumes, pieces, countdown)' }
 ];
 
 // `store.data` holds the currently open space's board (categories, shopping
@@ -83,7 +84,8 @@ export const ui = {
   spaceSettingsOpen: false,
   assignmentModalOpen: false,
   assignmentDraft: null,
-  managingCourseCats: false
+  managingCourseCats: false,
+  costumeDraft: null
 };
 
 export function defaultState(name){
@@ -103,7 +105,8 @@ export function defaultState(name){
     courseNotes: '',
     courseInstructions: '',
     courseImportantNotes: [],
-    courseMaterials: []
+    courseMaterials: [],
+    costumeStatus: {}
   };
 }
 
@@ -132,6 +135,7 @@ export function normalizeState(){
   if(store.data.courseInstructions === undefined) store.data.courseInstructions = '';
   if(!store.data.courseImportantNotes) store.data.courseImportantNotes = [];
   if(!store.data.courseMaterials) store.data.courseMaterials = [];
+  if(!store.data.costumeStatus) store.data.costumeStatus = {};
   // migrate the old single-string field, if it's still hanging around
   if(store.data.courseImportantNote){
     store.data.courseImportantNotes.push(store.data.courseImportantNote);
@@ -331,6 +335,13 @@ export async function createSpace(name, features, icon, accent){
   const cleanName = (name || '').trim() || 'untitled space';
   const id = uid();
   const state = defaultState(cleanName);
+  if((features || []).includes('costumes')){
+    // costume spaces count down to the next Halloween by default (editable)
+    const now = new Date();
+    let y = now.getFullYear();
+    if(now > new Date(y, 9, 31, 23, 59)) y++;
+    state.moveInDate = `${y}-10-31T23:59`;
+  }
   const maxOrder = store.spaces.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
   try{
     await spacesCol.doc(id).set({ name: cleanName, features: features || [], order: maxOrder + 1, state: JSON.stringify(state), icon: icon || 'pin', accent: accent || 'terracotta' });

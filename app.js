@@ -8,6 +8,7 @@ import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, rende
 import { renderQuickList, renderTodoList, attachListsEvents } from './lists.js';
 import { renderMoodBoard, attachMoodboardEvents } from './moodboard.js';
 import { renderCourseTimeline, attachCourseEvents } from './course.js';
+import { renderCostumeCountdown, renderCostumes, attachCostumeEvents } from './costumes.js';
 import { BACK_ICON } from './shared.js';
 
 export function render(){
@@ -25,6 +26,7 @@ export function render(){
   const hasShopping = store.features.includes('shopping');
   const hasTodo = store.features.includes('todo');
   const isCourse = store.features.includes('course');
+  const isCostumes = !isCourse && store.features.includes('costumes');
 
   let html = `
     <header>
@@ -38,13 +40,15 @@ export function render(){
   if(isCourse){
     html += renderCourseInfoCard();
     html += renderSyllabusCard();
+  } else if(isCostumes){
+    html += renderCostumeCountdown();
   } else if(hasInfo){
     html += renderCountdown();
     html += renderInfoCard();
     html += renderBudgetModal();
   }
 
-  const tabs = [{id:'board', label: isCourse ? 'course board' : 'mood board'}];
+  const tabs = [{id:'board', label: isCourse ? 'course board' : (isCostumes ? 'costumes' : 'mood board')}];
   if(hasShopping) tabs.push({id:'quick', label:'shopping list'});
   if(hasTodo) tabs.push({id:'todo', label:'stuff to do'});
 
@@ -58,6 +62,8 @@ export function render(){
     html += renderTodoList();
   } else if(isCourse){
     html += renderCourseTimeline();
+  } else if(isCostumes){
+    html += renderCostumes();
   } else {
     html += renderMoodBoard();
   }
@@ -90,6 +96,7 @@ export function attachEvents(){
   attachListsEvents();
   attachMoodboardEvents();
   attachCourseEvents();
+  attachCostumeEvents();
 }
 
 loadData();

@@ -11,6 +11,9 @@ import { store, ui, saveData } from './store.js';
 import { uid, escapeHtml, daysUntil, PENCIL_ICON, COLLAPSE_ICON, compressImage } from './shared.js';
 import { render } from './app.js';
 
+// Firestore documents max out at 1MB; leave headroom under that.
+const PHOTO_BUDGET_CHARS = 900000;
+
 const STATUSES = [
   { id: 'idea', label: 'just an idea' },
   { id: 'ordered', label: 'ordered' },
@@ -64,11 +67,43 @@ export function renderCostumeCountdown(){
   </div>`;
 }
 
+function renderGallery(cat){
+  const imgs = cat.images || [];
+  const addLabel = `<label class="cs-link cs-add-photo">+ add photos<input type="file" accept="image/*" multiple data-csphoto="${cat.id}" /></label>`;
+  if(imgs.length === 0){
+    return `<label class="cs-photo cs-photo-empty">+ add inspiration photos<input type="file" accept="image/*" multiple data-csphoto="${cat.id}" /></label>`;
+  }
+  const cls = imgs.length === 1 ? 'n1' : (imgs.length === 2 ? 'n2' : 'nmany');
+  return `<div class="cs-gallery ${cls}">
+    ${imgs.map(img => `<div class="cs-thumb" data-csview="${cat.id}|${img.id}"><img src="${img.data}" /><span class="cs-thumb-del" data-csimgdel="${cat.id}|${img.id}" title="remove photo">✕</span></div>`).join('')}
+  </div>
+  <div class="cs-photo-links">${addLabel}<span class="cs-photo-count">${imgs.length} photo${imgs.length === 1 ? '' : 's'}</span></div>`;
+}
+
+function renderPhotoViewer(){
+  const v = ui.costumePhotoView;
+  if(!v) return '';
+  const cat = store.data.categories.find(c => c.id === v.catId);
+  const imgs = cat ? (cat.images || []) : [];
+  const i = imgs.findIndex(x => x.id === v.id);
+  if(i === -1) return '';
+  return `<div class="modal-overlay cs-viewer" id="csViewerOverlay">
+    <div class="cs-viewer-box">
+      <img src="${imgs[i].data}" />
+      <div class="cs-viewer-bar">
+        ${imgs.length > 1 ? `<span class="cs-viewer-btn" id="csViewPrev">‹</span>` : '<span></span>'}
+        <span class="cs-viewer-count">${i + 1} / ${imgs.length}</span>
+        ${imgs.length > 1 ? `<span class="cs-viewer-btn" id="csViewNext">›</span>` : '<span></span>'}
+      </div>
+      <span class="cs-viewer-close" id="csViewClose">✕</span>
+    </div>
+  </div>`;
+}
+
 function renderCostumeCard(cat){
   const status = statusOf(cat.id);
   const pieces = piecesOf(cat);
   const readyCount = pieces.filter(p => p.completed).length;
-  const photo = (cat.images || [])[0];
 
   return `<div class="cs-card">
     <div class="cs-pin"></div>
@@ -77,13 +112,7 @@ function renderCostumeCard(cat){
       <span class="cs-edit" data-csedit="${cat.id}" title="edit costume">${PENCIL_ICON}</span>
     </div>
     <span class="cs-status cs-s-${status.id}" data-csstatus="${cat.id}" title="tap to change">${status.label}</span>
-    ${photo
-      ? `<div class="cs-photo"><img src="${photo.data}" /></div>
-         <div class="cs-photo-links">
-           <label class="cs-link">swap photo<input type="file" accept="image/*" data-csphoto="${cat.id}" /></label>
-           <span class="cs-link" data-csphotodel="${cat.id}">remove</span>
-         </div>`
-      : `<label class="cs-photo cs-photo-empty">+ add inspiration photo<input type="file" accept="image/*" data-csphoto="${cat.id}" /></label>`}
+    ${renderGallery(cat)}
     <ul class="cs-pieces">
       ${pieces.length === 0 ? `<li class="cs-empty">no pieces yet</li>` : ''}
       ${pieces.map(p => `<li>
@@ -179,6 +208,7 @@ export function renderCostumes(){
     html += `<div class="cs-bottom">${renderShoppingCard()}${renderBudgetCard()}</div>`;
   }
   html += renderCostumeModal();
+  html += renderPhotoViewer();
   return html;
 }
 
@@ -220,20 +250,62 @@ export function attachCostumeEvents(){
     render();
   });
 
-  // photos (one cover photo per costume)
+  // photos (any number per costume)
   document.querySelectorAll('[data-csphoto]').forEach(el => el.addEventListener('change', (e) => {
     const cat = store.data.categories.find(c => c.id === el.getAttribute('data-csphoto'));
-    const file = (e.target.files || [])[0];
-    if(!cat || !file) return;
-    compressImage(file, 600, dataUrl => {
-      cat.images = [{ id: uid(), data: dataUrl }];
-      render(); saveData();
+    const files = Array.from(e.target.files || []);
+    if(!cat || files.length === 0) return;
+    if(!cat.images) cat.images = [];
+    const added = [];
+    let remaining = files.length;
+    files.forEach(file => {
+      compressImage(file, 500, dataUrl => {
+        added.push({ id: uid(), data: dataUrl });
+        remaining--;
+        if(remaining > 0) return;
+        // each space is saved as one cloud document (~1MB cap), so stop
+        // before photos could make the whole space fail to sync
+        const before = cat.images.length;
+        cat.images.push(...added);
+        if(JSON.stringify(store.data).length > PHOTO_BUDGET_CHARS){
+          cat.images.length = before;
+          alert('This space is out of room for photos. Remove a few photos (here or in other costumes) and try again.');
+          render();
+          return;
+        }
+        render(); saveData();
+      });
     });
   }));
-  document.querySelectorAll('[data-csphotodel]').forEach(el => el.onclick = () => {
-    const cat = store.data.categories.find(c => c.id === el.getAttribute('data-csphotodel'));
-    if(cat){ cat.images = []; render(); saveData(); }
+  document.querySelectorAll('[data-csimgdel]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    const [catId, imgId] = el.getAttribute('data-csimgdel').split('|');
+    const cat = store.data.categories.find(c => c.id === catId);
+    if(!cat) return;
+    cat.images = (cat.images || []).filter(i => i.id !== imgId);
+    render(); saveData();
   });
+  document.querySelectorAll('[data-csview]').forEach(el => el.onclick = () => {
+    const [catId, id] = el.getAttribute('data-csview').split('|');
+    ui.costumePhotoView = { catId, id };
+    render();
+  });
+
+  // photo viewer
+  const closeViewer = () => { ui.costumePhotoView = null; render(); };
+  const stepViewer = (dir) => {
+    const v = ui.costumePhotoView;
+    const cat = v && store.data.categories.find(c => c.id === v.catId);
+    if(!cat || !cat.images || cat.images.length < 2) return;
+    const i = cat.images.findIndex(x => x.id === v.id);
+    ui.costumePhotoView = { catId: v.catId, id: cat.images[(i + dir + cat.images.length) % cat.images.length].id };
+    render();
+  };
+  const viewerOverlay = document.getElementById('csViewerOverlay');
+  if(viewerOverlay) viewerOverlay.addEventListener('click', (e) => { if(e.target === viewerOverlay) closeViewer(); });
+  const viewClose = document.getElementById('csViewClose'); if(viewClose) viewClose.onclick = closeViewer;
+  const viewPrev = document.getElementById('csViewPrev'); if(viewPrev) viewPrev.onclick = () => stepViewer(-1);
+  const viewNext = document.getElementById('csViewNext'); if(viewNext) viewNext.onclick = () => stepViewer(1);
 
   // modal
   const overlay = document.getElementById('csModalOverlay');

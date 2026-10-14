@@ -85,7 +85,8 @@ export const ui = {
   assignmentModalOpen: false,
   assignmentDraft: null,
   managingCourseCats: false,
-  costumeDraft: null
+  costumeDraft: null,
+  costumePhotoView: null
 };
 
 export function defaultState(name){

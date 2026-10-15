@@ -1,7 +1,7 @@
 // The main app shell: bootstraps everything, owns the top-level render()
 // and attachEvents() functions that stitch each feature module together.
 
-import { store, ui, loadData, goHome, renameSpace } from './store.js';
+import { store, ui, loadData, goHome, renameSpace, createSpace } from './store.js';
 import { escapeHtml } from './shared.js';
 import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, renderHomeScreen,
   renderCourseInfoCard, renderSyllabusCard, attachChromeEvents, attachHomeEvents } from './chrome.js';
@@ -105,3 +105,24 @@ export function attachEvents(){
 }
 
 loadData();
+
+// One-tap budget setup: a link like  .../#budget-setup=<base64 json>  creates a
+// pre-filled budget space (the data lives in the link, never in this repo).
+function importBudgetFromHash(){
+  const m = location.hash.match(/^#budget-setup=(.+)$/);
+  if(!m) return;
+  const token = m[1];
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  let key = 'budgetSetupDone', done = '';
+  try{ done = localStorage.getItem(key) || ''; }catch(e){}
+  if(done === token) return;
+  let data;
+  try{ data = JSON.parse(decodeURIComponent(escape(atob(token.replace(/-/g,'+').replace(/_/g,'/'))))); }catch(e){ return; }
+  if(!data || !data.budget) return;
+  setTimeout(() => {
+    if(!confirm('Create your budget space from this setup link?')) return;
+    try{ localStorage.setItem(key, token); }catch(e){}
+    createSpace('Budget', ['budget'], '💰', 'sage', { budget: data.budget });
+  }, 1800);
+}
+importBudgetFromHash();

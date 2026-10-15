@@ -335,7 +335,7 @@ export function goHome(){
   render();
 }
 
-export async function createSpace(name, features, icon, accent){
+export async function createSpace(name, features, icon, accent, patch){
   const cleanName = (name || '').trim() || 'untitled space';
   const id = uid();
   const state = defaultState(cleanName);
@@ -346,6 +346,7 @@ export async function createSpace(name, features, icon, accent){
     if(now > new Date(y, 9, 31, 23, 59)) y++;
     state.moveInDate = `${y}-10-31T23:59`;
   }
+  if(patch) Object.assign(state, patch);
   const maxOrder = store.spaces.reduce((m, s) => Math.max(m, s.order ?? 0), -1);
   try{
     await spacesCol.doc(id).set({ name: cleanName, features: features || [], order: maxOrder + 1, state: JSON.stringify(state), icon: icon || 'pin', accent: accent || 'terracotta' });

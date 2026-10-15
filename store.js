@@ -35,7 +35,8 @@ export const ALL_FEATURES = [
   { id: 'todo', label: 'stuff to do' },
   { id: 'info', label: 'info card' },
   { id: 'course', label: 'course tracker (syllabus + assignments)' },
-  { id: 'costumes', label: 'costume planner (costumes, pieces, countdown)' }
+  { id: 'costumes', label: 'costume planner (costumes, pieces, countdown)' },
+  { id: 'budget', label: 'weekly budget (income, purchases, paydays)' }
 ];
 
 // `store.data` holds the currently open space's board (categories, shopping
@@ -86,7 +87,9 @@ export const ui = {
   assignmentDraft: null,
   managingCourseCats: false,
   costumeDraft: null,
-  costumePhotoView: null
+  costumePhotoView: null,
+  bd: null,
+  bdPlan: null
 };
 
 export function defaultState(name){

@@ -9,6 +9,7 @@ import { renderQuickList, renderTodoList, attachListsEvents } from './lists.js';
 import { renderMoodBoard, attachMoodboardEvents } from './moodboard.js';
 import { renderCourseTimeline, attachCourseEvents } from './course.js';
 import { renderCostumeCountdown, renderCostumes, attachCostumeEvents } from './costumes.js';
+import { renderBudget as renderBudgetSpace, attachBudgetEvents } from './budget.js';
 import { BACK_ICON } from './shared.js';
 
 export function render(){
@@ -27,6 +28,7 @@ export function render(){
   const hasTodo = store.features.includes('todo');
   const isCourse = store.features.includes('course');
   const isCostumes = !isCourse && store.features.includes('costumes');
+  const isBudget = !isCourse && !isCostumes && store.features.includes('budget');
 
   let html = `
     <header>
@@ -48,7 +50,7 @@ export function render(){
     html += renderBudgetModal();
   }
 
-  const tabs = [{id:'board', label: isCourse ? 'course board' : (isCostumes ? 'costumes' : 'mood board')}];
+  const tabs = [{id:'board', label: isCourse ? 'course board' : (isCostumes ? 'costumes' : (isBudget ? 'budget' : 'mood board'))}];
   if(hasShopping) tabs.push({id:'quick', label:'shopping list'});
   if(hasTodo) tabs.push({id:'todo', label:'stuff to do'});
 
@@ -64,6 +66,8 @@ export function render(){
     html += renderCourseTimeline();
   } else if(isCostumes){
     html += renderCostumes();
+  } else if(isBudget){
+    html += renderBudgetSpace();
   } else {
     html += renderMoodBoard();
   }
@@ -97,6 +101,7 @@ export function attachEvents(){
   attachMoodboardEvents();
   attachCourseEvents();
   attachCostumeEvents();
+  attachBudgetEvents();
 }
 
 loadData();

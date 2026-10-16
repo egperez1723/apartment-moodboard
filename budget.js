@@ -130,6 +130,13 @@ const moveFor = ws => B().moves.find(m => m.week === ws);
 function nextToMove(){
   return pastWeekStarts().find(ws => !moveFor(ws) && weekSummary(ws).leftover > 0.004) || null;
 }
+// Money that's free right now: last weeks' leftover you haven't moved yet,
+// plus anything this week's deposits covered beyond the plan.
+function spareMoney(){
+  const unmoved = sum(pastWeekStarts().filter(ws => !moveFor(ws)), ws => Math.max(0, weekSummary(ws).leftover));
+  const extra = sum(B().income.filter(e => inWeek(e, weekStart(todayStr()))), e => e.extra || 0);
+  return r2(unmoved + extra);
+}
 function saveDestinations(){
   return [...B().lines.filter(l => l.group === 'save').map(l => l.name), 'General savings'];
 }
@@ -366,12 +373,13 @@ function renderWishlist(){
   const d = BD(), items = B().wishlist;
   const open = items.filter(i => !i.got), got = items.filter(i => i.got);
   const total = sum(open, i => Number(i.price) || 0);
+  const spare = spareMoney();
   const row = i => {
     let host = '';
     try{ host = new URL(i.url).hostname.replace(/^www\./, ''); }catch(e){}
     return `<div class="bd-wish ${i.got ? 'got' : ''}"><span class="bd-check ${i.got ? 'on' : ''}" data-bdwgot="${i.id}" title="${i.got ? 'put back on list' : 'I got it'}">${i.got ? '✓' : ''}</span>
       <span class="t">${i.url ? `<a href="${attr(i.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(i.name)}</a>` : escapeHtml(i.name)}${host ? `<small>${escapeHtml(host)}</small>` : ''}</span>
-      <span class="a">${Number(i.price) > 0 ? money(Number(i.price)) : ''}</span><span class="bd-x" data-bdwdel="${i.id}" title="remove">✕</span></div>`;
+      <span class="a">${Number(i.price) > 0 ? money(Number(i.price)) : ''}${!i.got && Number(i.price) > 0 ? (Number(i.price) <= spare + 0.004 ? '<small class="bd-aff yes">you could afford this</small>' : `<small class="bd-aff">need ${money(r2(Number(i.price) - spare))} more</small>`) : ''}</span><span class="bd-x" data-bdwdel="${i.id}" title="remove">✕</span></div>`;
   };
   return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-tape"></div>
     <div class="bd-label">wish list <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">things I want when I can afford them</small></div>
@@ -379,6 +387,7 @@ function renderWishlist(){
       <input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ price" data-bdin="xPrice" value="${attr(d.xPrice)}" /></div>
     <div class="bd-f"><input class="bd-note" type="text" inputmode="url" placeholder="link (optional)" data-bdin="xUrl" value="${attr(d.xUrl)}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdWishAdd">add to wish list</button><span class="bd-err">${escapeHtml(d.err.wish || '')}</span></div>
+    ${open.length ? `<div class="bd-hint" style="margin-bottom:4px;">spare money right now: <b>${money(spare)}</b> <span title="">(last weeks' leftover not moved yet + extra from this week's pay)</span></div>` : ''}
     ${open.map(row).join('') || '<div class="bd-hint">nothing on the list yet</div>'}
     ${open.length ? `<div class="bd-sumrow"><span>total to save for</span><b>${money(total)}</b></div>` : ''}
     ${got.length ? `<div class="bd-grp">got it</div>${got.map(row).join('')}` : ''}

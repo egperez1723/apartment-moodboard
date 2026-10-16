@@ -638,3 +638,6 @@
 .bd-check.on{background:var(--sage-dark);border-color:var(--sage-dark);}
 .bd-sumrow{display:flex;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);}
 .bd-sumrow b{color:var(--ink);font-family:'Fraunces',serif;font-size:17px;font-weight:500;}
+.bd-wish .a{text-align:right;}
+.bd-aff{display:block;font-size:10.5px;font-weight:600;color:#93502c;}
+.bd-aff.yes{color:#4c5c41;}

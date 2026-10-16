@@ -24,6 +24,7 @@
 //   goals     savings goals with a progress bar: {id, name, total, due, paid, lineId} (lineId = the weekly savings line that feeds it)
 //   buckets   money set aside that isn't touched: {id, name, balance, locked}
 //   cushion   minimum to keep in checking
+//   expected  exact amounts you know are coming: {id, src, amt, date}
 // Weeks run Sunday to Saturday, in local time.
 
 import { store, ui, saveData } from './store.js';
@@ -75,7 +76,7 @@ function healIncome(b){
 function B(){
   if(!store.data.budget) store.data.budget = defaultBudget();
   const b = store.data.budget;
-  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
+  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!Array.isArray(b.sources) || b.sources.length === 0) b.sources = defaultBudget().sources;
   if(typeof b.weeklyGoal !== 'number') b.weeklyGoal = 0;
   if(typeof b.cushion !== 'number') b.cushion = 0;
@@ -83,7 +84,7 @@ function B(){
   return b;
 }
 function BD(){
-  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', wDate: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', preview: null, openWeek: null, err: {}, scroll: null };
+  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', wDate: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', eSrc: null, eAmt: '', eDate: '', preview: null, openWeek: null, err: {}, scroll: null };
   return ui.bd;
 }
 
@@ -200,6 +201,8 @@ const unpaidWork = srcId => B().work.filter(w => w.src === srcId && !w.paid);
 const netAmt = w => { const sc = srcById(w.src); return r2((Number(w.amt) || 0) * (1 - ((sc && Number(sc.withheldPct)) || 0) / 100)); };
 const workPay = list => sum(list, netAmt);
 function lastPayday(dow, today){ return addDays(today, -((parseDay(today).getDay() - dow + 7) % 7)); }
+// strictly after today (so on a payday itself, "next pay" means a week from now)
+function nextPaydayAfter(dow, today){ return addDays(today, ((dow - parseDay(today).getDay() + 6) % 7) + 1); }
 function nextPayday(dow, today){ return addDays(today, (dow - parseDay(today).getDay() + 7) % 7); }
 // Which payday a deposit entered today belongs to: the one just passed (within 2 days),
 // otherwise the one coming up if it's within 2 days (paid early), otherwise the last one.
@@ -212,6 +215,8 @@ function payDateFor(s, today){
 // days between a shift and the payday that includes it (1 = paid the next time payday comes around;
 // e.g. 12 = a shift on Sunday the 4th is paid on Friday the 16th)
 const holdOf = s => (s.holdDays === undefined || s.holdDays === null || s.holdDays === '') ? 1 : Number(s.holdDays);
+// an exact amount you've told the app is coming around `payDate`
+const expectedFor = (s, payDate) => B().expected.find(e => e.src === s.id && Math.abs(daysBetween(e.date, payDate)) <= 2);
 // unpaid shifts that a payday on `payDate` would cover
 const payableOn = (s, payDate) => unpaidWork(s.id).filter(w => w.date <= addDays(payDate, -holdOf(s)));
 function paydayPrompts(){
@@ -219,7 +224,7 @@ function paydayPrompts(){
   return B().sources.map(s => {
     const d = lastPayday(s.payDay, today);
     if(daysBetween(d, today) > 2) return null;       // payday + 2 days of grace
-    const amt = workPay(payableOn(s, d));
+    const ex = expectedFor(s, d), amt = ex ? ex.amt : workPay(payableOn(s, d));
     return amt > 0 ? { src: s, amt } : null;
   }).filter(Boolean);
 }
@@ -270,7 +275,12 @@ function renderHero(ws){
   const funded = fundedFor(ws);
   const covered = Math.min(planTotal(), sum(Object.values(funded).map(v => ({ v })), x => x.v));
   const short = orderedLines().filter(l => (funded[l.id] || 0) < (Number(l.target) || 0) - 0.004 && (Number(l.target) || 0) > 0);
-  const pendingParts = b.sources.map(s => ({ s, a: workPay(unpaidWork(s.id)) })).filter(x => x.a > 0);
+  const pendingParts = b.sources.map(s => {
+    const ex = b.expected.filter(e => e.src === s.id);
+    if(!ex.length) return { s, a: workPay(unpaidWork(s.id)) };
+    const last = ex.map(e => e.date).sort().pop(), covered = payableOn(s, last);
+    return { s, a: r2(sum(ex, e => e.amt) + workPay(unpaidWork(s.id).filter(w => !covered.includes(w)))) };
+  }).filter(x => x.a > 0);
   const goal = b.weeklyGoal || 0;
   const pct = (v, t) => t > 0 ? Math.max(0, Math.min(100, v / t * 100)) : 0;
   return `<div class="bd-card bd-hero"><div class="bd-pin"></div>
@@ -306,7 +316,7 @@ function renderWork(ws){
       summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${(full || half) ? `${[full ? full + ' full' : '', half ? half + ' half' : ''].filter(Boolean).join(' + ')} · ${money(sum(mine, w => w.amt))}` : 'none yet'}</b></div>`;
     }
   });
-  const unpaid = B().sources.map(s => { const a = workPay(unpaidWork(s.id)); const np = nextPayday(s.payDay, todayStr()), nowAmt = workPay(payableOn(s, np)); return a > 0 ? `<div class="bd-unpaid"><span>${escapeHtml(s.name)} not paid yet: <b>${money(a)}</b> <small>· ${nowAmt > 0 ? `${money(nowAmt)} arrives ${np === todayStr() ? 'today' : dayLabel(np)}` : `next payday ${dayLabel(np)} won't include these`}</small></span><button class="bd-btn sm" data-bdpay="${s.id}">I got paid for this</button></div>` : ''; }).join('');
+  const unpaid = B().sources.map(s => { const a = workPay(unpaidWork(s.id)); const ex = B().expected.filter(e => e.src === s.id && e.date >= addDays(todayStr(), -2)).sort((x, y) => x.date.localeCompare(y.date))[0], np = ex ? ex.date : nextPayday(s.payDay, todayStr()), nowAmt = ex ? ex.amt : workPay(payableOn(s, np)); return (a > 0 || ex) ? `<div class="bd-unpaid"><span>${escapeHtml(s.name)} not paid yet: <b>${money(a)}</b> <small>· ${nowAmt > 0 ? `${money(nowAmt)} ${ex ? 'expected' : 'arrives'} ${np === todayStr() ? 'today' : dayLabel(np)}` : `next payday ${dayLabel(np)} won't include these`}</small></span><button class="bd-btn sm" data-bdpay="${s.id}">I got paid for this</button></div>` : ''; }).join('');
   return `<div class="bd-card"><div class="bd-tape"></div>
     <div class="bd-label">work time</div>
     <div class="bd-seg">${opts.map((o, i) => `<span class="${i === d.wOpt ? 'on' : ''}" data-bdwopt="${i}">${escapeHtml(o.label)}</span>`).join('')}</div>
@@ -316,7 +326,20 @@ function renderWork(ws){
     <div class="bd-f"><button class="bd-btn" id="bdWorkAdd">${isShift ? 'log shift' : 'log time'}</button><span class="bd-err">${escapeHtml(d.err.work || '')}</span></div>
     ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">You know your pay right after a shift. It counts as "on its way" until payday, when I'll show where it goes.</div>` : ''}
     ${summary}${unpaid}
+    ${renderExpected()}
   </div>`;
+}
+
+function renderExpected(){
+  const d = BD(), srcs = B().sources;
+  if(!d.eSrc || !srcById(d.eSrc)) d.eSrc = srcs[0].id;
+  const sc = srcById(d.eSrc), def = nextPaydayAfter(sc.payDay, todayStr());
+  const list = B().expected.slice().sort((x, y) => x.date.localeCompare(y.date)).map(e => `<div class="bd-wkline"><span>${escapeHtml((srcById(e.src) || { name: 'pay' }).name)} · ${dayLabel(e.date)}</span><b>${money(e.amt)} <span class="bd-x" data-bdedel="${e.id}" title="remove">✕</span></b></div>`).join('');
+  return `<div class="bd-grp" style="margin-top:14px;">know exactly what's coming?</div>${list}
+    <div class="bd-seg" style="margin:8px 0;">${srcs.map(x => `<span class="${x.id === d.eSrc ? 'on' : ''}" data-bdesrc="${x.id}">${escapeHtml(x.name)}</span>`).join('')}</div>
+    <div class="bd-f"><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ expected" data-bdin="eAmt" value="${attr(d.eAmt)}" />
+      <input class="bd-date" type="date" data-bdin="eDate" value="${attr(d.eDate || def)}" />
+      <button class="bd-btn sm" id="bdExpAdd">save</button></div><div class="bd-err">${escapeHtml(d.err.exp || '')}</div>`;
 }
 
 function renderIncomeCard(){
@@ -625,10 +648,24 @@ export function attachBudgetEvents(){
     render(); saveData();
   });
 
+  document.querySelectorAll('[data-bdesrc]').forEach(el => el.onclick = () => { d.eSrc = el.getAttribute('data-bdesrc'); d.eDate = ''; render(); });
+  on('bdExpAdd', () => {
+    const amt = num(d.eAmt), sc = srcById(d.eSrc), date = d.eDate || nextPaydayAfter(sc.payDay, todayStr());
+    if(!(amt > 0)){ d.err.exp = 'enter the amount you expect'; render(); return; }
+    B().expected = B().expected.filter(e => !(e.src === sc.id && Math.abs(daysBetween(e.date, date)) <= 2));
+    B().expected.push({ id: uid(), src: sc.id, amt, date });
+    d.eAmt = ''; d.eDate = ''; d.err.exp = '';
+    render(); saveData();
+  });
+  document.querySelectorAll('[data-bdedel]').forEach(el => el.onclick = () => {
+    B().expected = B().expected.filter(e => e.id !== el.getAttribute('data-bdedel'));
+    render(); saveData();
+  });
+
   // "I got paid for this" / payday prompt -> prefill the deposit form
   document.querySelectorAll('[data-bdpay]').forEach(el => el.onclick = () => {
     const id = el.getAttribute('data-bdpay');
-    const sc = srcById(id), pay = workPay(payableOn(sc, payDateFor(sc, todayStr())));
+    const sc = srcById(id), pd = payDateFor(sc, todayStr()), ex = expectedFor(sc, pd), pay = ex ? ex.amt : workPay(payableOn(sc, pd));
     d.iSrc = id; d.iAmt = pay > 0 ? String(pay) : ''; d.preview = null; d.scroll = 'iamt';
     render();
   });
@@ -651,6 +688,7 @@ export function attachBudgetEvents(){
     const paid = payableOn(sc, payDateFor(sc, today));
     paid.forEach(w => { w.paid = true; });
     B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
+    B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
     d.preview = null; d.iAmt = '';
     render(); saveData();
   });

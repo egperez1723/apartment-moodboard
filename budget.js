@@ -249,12 +249,6 @@ function renderPayStrip(){
   }).join('')}</div>`;
 }
 
-function renderPrompts(){
-  return paydayPrompts().map(p => `<div class="bd-card bd-payday"><div class="bd-pin"></div>
-    <div class="bd-label">${escapeHtml(p.src.name)} payday 💸</div>
-    <div style="font-size:14px;">You've logged <b>${money(p.amt)}</b> that hasn't been paid yet. Enter what actually landed in your account and I'll show where it goes.</div>
-    <div class="bd-f" style="margin-top:10px;"><button class="bd-btn" data-bdpay="${p.src.id}">enter my ${escapeHtml(p.src.name)} pay</button></div></div>`).join('');
-}
 
 function renderBanner(){
   const ws = nextToMove();
@@ -275,12 +269,6 @@ function renderHero(ws){
   const funded = fundedFor(ws);
   const covered = Math.min(planTotal(), sum(Object.values(funded).map(v => ({ v })), x => x.v));
   const short = orderedLines().filter(l => (funded[l.id] || 0) < (Number(l.target) || 0) - 0.004 && (Number(l.target) || 0) > 0);
-  const pendingParts = b.sources.map(s => {
-    const ex = b.expected.filter(e => e.src === s.id);
-    if(!ex.length) return { s, a: workPay(unpaidWork(s.id)) };
-    const last = ex.map(e => e.date).sort().pop(), covered = payableOn(s, last);
-    return { s, a: r2(sum(ex, e => e.amt) + workPay(unpaidWork(s.id).filter(w => !covered.includes(w)))) };
-  }).filter(x => x.a > 0);
   const goal = b.weeklyGoal || 0;
   const pct = (v, t) => t > 0 ? Math.max(0, Math.min(100, v / t * 100)) : 0;
   return `<div class="bd-card bd-hero"><div class="bd-pin"></div>
@@ -294,7 +282,6 @@ function renderHero(ws){
       <div class="bd-bar"><i style="width:${pct(covered, planTotal())}%"></i></div>
       <div class="bd-s">${short.length === 0 ? 'every line is funded for the week 🎉' : `${money(r2(planTotal() - covered))} still to cover · ${short.length} line${short.length === 1 ? '' : 's'} not full yet`}</div>
     </div>
-    <div class="bd-pending">${pendingParts.length ? `<b>${money(sum(pendingParts, x => x.a))}</b> still on its way: ${pendingParts.map(x => `${escapeHtml(x.s.name)} ${money(x.a)} on ${DAY_NAMES[x.s.payDay].slice(0, 3)}`).join(' · ')}` : 'nothing pending — everything logged has been paid'}</div>
   </div>`;
 }
 
@@ -316,7 +303,6 @@ function renderWork(ws){
       summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${(full || half) ? `${[full ? full + ' full' : '', half ? half + ' half' : ''].filter(Boolean).join(' + ')} · ${money(sum(mine, w => w.amt))}` : 'none yet'}</b></div>`;
     }
   });
-  const unpaid = B().sources.map(s => { const a = workPay(unpaidWork(s.id)); const ex = B().expected.filter(e => e.src === s.id && e.date >= addDays(todayStr(), -2)).sort((x, y) => x.date.localeCompare(y.date))[0], np = ex ? ex.date : nextPayday(s.payDay, todayStr()), nowAmt = ex ? ex.amt : workPay(payableOn(s, np)); return (a > 0 || ex) ? `<div class="bd-unpaid"><span>${escapeHtml(s.name)} not paid yet: <b>${money(a)}</b> <small>· ${nowAmt > 0 ? `${money(nowAmt)} ${ex ? 'expected' : 'arrives'} ${np === todayStr() ? 'today' : dayLabel(np)}` : `next payday ${dayLabel(np)} won't include these`}</small></span><button class="bd-btn sm" data-bdpay="${s.id}">I got paid for this</button></div>` : ''; }).join('');
   return `<div class="bd-card"><div class="bd-tape"></div>
     <div class="bd-label">work time</div>
     <div class="bd-seg">${opts.map((o, i) => `<span class="${i === d.wOpt ? 'on' : ''}" data-bdwopt="${i}">${escapeHtml(o.label)}</span>`).join('')}</div>
@@ -324,23 +310,11 @@ function renderWork(ws){
       <label>I made</label><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ I made" data-bdin="wMade" value="${attr(d.wMade)}" /></div>` : ''}
     <div class="bd-f"><label>worked on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="wDate" value="${attr(d.wDate || todayStr())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdWorkAdd">${isShift ? 'log shift' : 'log time'}</button><span class="bd-err">${escapeHtml(d.err.work || '')}</span></div>
-    ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">You know your pay right after a shift. It counts as "on its way" until payday, when I'll show where it goes.</div>` : ''}
-    ${summary}${unpaid}
-    ${renderExpected()}
+    ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">Log what you made right after a shift. Money only counts toward your plan when you enter it under "I got paid".</div>` : ''}
+    ${summary}
   </div>`;
 }
 
-function renderExpected(){
-  const d = BD(), srcs = B().sources;
-  if(!d.eSrc || !srcById(d.eSrc)) d.eSrc = srcs[0].id;
-  const sc = srcById(d.eSrc), def = nextPaydayAfter(sc.payDay, todayStr());
-  const list = B().expected.slice().sort((x, y) => x.date.localeCompare(y.date)).map(e => `<div class="bd-wkline"><span>${escapeHtml((srcById(e.src) || { name: 'pay' }).name)} · ${dayLabel(e.date)}</span><b>${money(e.amt)} <span class="bd-x" data-bdedel="${e.id}" title="remove">✕</span></b></div>`).join('');
-  return `<div class="bd-grp" style="margin-top:14px;">know exactly what's coming?</div>${list}
-    <div class="bd-seg" style="margin:8px 0;">${srcs.map(x => `<span class="${x.id === d.eSrc ? 'on' : ''}" data-bdesrc="${x.id}">${escapeHtml(x.name)}</span>`).join('')}</div>
-    <div class="bd-f"><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ expected" data-bdin="eAmt" value="${attr(d.eAmt)}" />
-      <input class="bd-date" type="date" data-bdin="eDate" value="${attr(d.eDate || def)}" />
-      <button class="bd-btn sm" id="bdExpAdd">save</button></div><div class="bd-err">${escapeHtml(d.err.exp || '')}</div>`;
-}
 
 function renderIncomeCard(){
   const d = BD(), srcs = B().sources;
@@ -455,7 +429,7 @@ function renderRecent(){
   const b = B(), items = [];
   b.income.forEach(e => items.push({ k: 'in', kind: 'income', id: e.id, date: e.date, ts: e.ts || 0, t: `Paid · ${escapeHtml((srcById(e.src) || { name: 'income' }).name)}`, s: e.tax > 0 ? `${money(e.tax)} set aside for taxes` : '', a: e.amt }));
   b.purchases.forEach(p => items.push({ k: 'out', kind: 'purchase', id: p.id, date: p.date, ts: p.ts || 0, t: escapeHtml((lineById(p.line) || { name: 'removed line' }).name), s: escapeHtml(p.note || ''), a: p.amt }));
-  b.work.forEach(w => { const s = srcById(w.src) || { name: 'work' }; items.push({ k: 'work', kind: 'work', id: w.id, date: w.date, ts: w.ts || 0, t: w.type === 'shift' ? `${escapeHtml(s.name)} · ${w.hours} h` : `${escapeHtml(s.name)} · ${w.type} day`, s: w.paid ? 'paid' : 'not paid yet', a: w.amt }); });
+  b.work.forEach(w => { const s = srcById(w.src) || { name: 'work' }; items.push({ k: 'work', kind: 'work', id: w.id, date: w.date, ts: w.ts || 0, t: w.type === 'shift' ? `${escapeHtml(s.name)} · ${w.hours} h` : `${escapeHtml(s.name)} · ${w.type} day`, s: '', a: w.amt }); });
   b.moves.filter(m => m.dest !== 'skipped').forEach(m => items.push({ k: 'save', kind: 'move', id: m.id, date: m.date, ts: 0, t: `Moved leftover to ${escapeHtml(m.dest)}`, s: weekLabel(m.week), a: m.amt }));
   items.sort((x, y) => y.date.localeCompare(x.date) || y.ts - x.ts);
   const icon = { in: '↓', out: '↑', work: '⏱', save: '★' };
@@ -589,7 +563,6 @@ export function renderBudget(){
   const ws = weekStart(todayStr());
   return `<div class="bd-weeklabel">this week · ${weekLabel(ws)}</div>
     ${renderPayStrip()}
-    ${renderPrompts()}
     ${renderBanner()}
     ${renderHero(ws)}
     <div class="bd-grid">${renderWork(ws)}${renderIncomeCard()}${renderPreview()}</div>

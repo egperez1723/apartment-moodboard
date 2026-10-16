@@ -358,6 +358,20 @@ export async function createSpace(name, features, icon, accent, patch){
   openSpace(id);
 }
 
+// Read a space's saved state from the cloud, change it, and save it back.
+export async function updateSpaceState(id, change){
+  const snap = await spacesCol.doc(id).get({ source: 'server' });
+  if(!snap.exists) throw new Error('space not found');
+  let state;
+  try{ state = JSON.parse(snap.data().state || '{}'); }catch(e){ throw new Error('space data unreadable'); }
+  saveLocalBackup(id, state);
+  change(state);
+  await spacesCol.doc(id).set({ state: JSON.stringify(state) }, { merge: true });
+  try{ localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(state)); }catch(e){}
+  if(spaceDataCache) spaceDataCache[id] = state;
+  return state;
+}
+
 export async function setSpaceIcon(id, icon){
   const s = store.spaces.find(x => x.id === id);
   if(s) s.icon = icon;

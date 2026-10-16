@@ -1,7 +1,7 @@
 // The main app shell: bootstraps everything, owns the top-level render()
 // and attachEvents() functions that stitch each feature module together.
 
-import { store, ui, loadData, goHome, renameSpace, createSpace } from './store.js';
+import { store, ui, loadData, goHome, renameSpace, createSpace, openSpace, updateSpaceState } from './store.js';
 import { escapeHtml } from './shared.js';
 import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, renderHomeScreen,
   renderCourseInfoCard, renderSyllabusCard, attachChromeEvents, attachHomeEvents } from './chrome.js';
@@ -9,7 +9,7 @@ import { renderQuickList, renderTodoList, attachListsEvents } from './lists.js';
 import { renderMoodBoard, attachMoodboardEvents } from './moodboard.js';
 import { renderCourseTimeline, attachCourseEvents } from './course.js';
 import { renderCostumeCountdown, renderCostumes, attachCostumeEvents } from './costumes.js';
-import { renderBudget as renderBudgetSpace, attachBudgetEvents } from './budget.js';
+import { renderBudget as renderBudgetSpace, attachBudgetEvents, buildBudget } from './budget.js';
 import { BACK_ICON } from './shared.js';
 
 export function render(){
@@ -126,3 +126,38 @@ function importBudgetFromHash(){
   }, 1800);
 }
 importBudgetFromHash();
+
+// Budget plan update link: .../#budget-update=<base64 json>. Changes the lines, goals,
+// savings buckets etc. of your existing budget space (or makes one) and keeps history.
+function importBudgetUpdateFromHash(){
+  const m = location.hash.match(/^#budget-update=(.+)$/);
+  if(!m) return;
+  const token = m[1];
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  let done = '';
+  try{ done = localStorage.getItem('budgetUpdateDone') || ''; }catch(e){}
+  if(done === token) return;
+  let patch;
+  try{ patch = JSON.parse(decodeURIComponent(escape(atob(token.replace(/-/g,'+').replace(/_/g,'/'))))); }catch(e){ return; }
+  if(!patch) return;
+  setTimeout(async () => {
+    for(let i = 0; i < 20 && !store.spaces.length; i++) await new Promise(r => setTimeout(r, 300));
+    const existing = store.spaces.find(s => (s.features || []).includes('budget') && !s.archived);
+    if(!confirm(existing ? 'Update your budget plan from this link? Your logged history stays.' : 'No budget space found. Create one from this link?')) return;
+    try{ localStorage.setItem('budgetUpdateDone', token); }catch(e){}
+    try{
+      if(existing){
+        await updateSpaceState(existing.id, st => { st.budget = buildBudget(st.budget, patch); });
+        openSpace(existing.id);
+        alert('Budget plan updated!');
+      } else {
+        createSpace('Budget', ['budget'], '💰', 'sage', { budget: buildBudget(null, patch) });
+      }
+    }catch(e){
+      console.error('budget update failed', e);
+      try{ localStorage.removeItem('budgetUpdateDone'); }catch(_){}
+      alert('Could not update the budget (' + (e.message || 'unknown error') + '). Check your connection and open the link again.');
+    }
+  }, 2200);
+}
+importBudgetUpdateFromHash();

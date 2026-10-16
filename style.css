@@ -627,3 +627,14 @@
 .bd-plan-line select{width:92px;padding:9px 4px;font-size:12px;}
 #bdQuick{width:100%;resize:vertical;margin-bottom:6px;}
 @media(max-width:760px){.bd-grid,.bd-hero{grid-template-columns:1fr;} .bd-v{font-size:32px;}}
+.bd-wish{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px;}
+.bd-wish:last-child{border-bottom:none;}
+.bd-wish .t{flex:1;min-width:0;overflow-wrap:anywhere;}
+.bd-wish .t a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--terracotta);text-underline-offset:3px;}
+.bd-wish .t small{display:block;font-size:11px;color:var(--ink-soft);}
+.bd-wish .a{font-variant-numeric:tabular-nums;font-weight:500;}
+.bd-wish.got .t,.bd-wish.got .a{text-decoration:line-through;color:var(--ink-soft);}
+.bd-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff;}
+.bd-check.on{background:var(--sage-dark);border-color:var(--sage-dark);}
+.bd-sumrow{display:flex;justify-content:space-between;margin-top:8px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-soft);}
+.bd-sumrow b{color:var(--ink);font-family:'Fraunces',serif;font-size:17px;font-weight:500;}

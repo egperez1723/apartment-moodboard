@@ -20,6 +20,7 @@
 //   purchases {id, line, amt, note, date, ts}
 //   work      {id, src, type:'shift'|'full'|'half', hours, amt, date, paid, ts}
 //   moves     leftover moved to savings: {id, week, dest, amt, date}
+//   wishlist  things to buy later: {id, name, url, price, got, ts}
 // Weeks run Sunday to Saturday, in local time.
 
 import { store, ui, saveData } from './store.js';
@@ -48,13 +49,13 @@ function defaultBudget(){
 function B(){
   if(!store.data.budget) store.data.budget = defaultBudget();
   const b = store.data.budget;
-  ['lines', 'income', 'purchases', 'work', 'moves'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
+  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!Array.isArray(b.sources) || b.sources.length === 0) b.sources = defaultBudget().sources;
   if(typeof b.weeklyGoal !== 'number') b.weeklyGoal = 0;
   return b;
 }
 function BD(){
-  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', preview: null, openWeek: null, err: {}, scroll: null };
+  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', preview: null, openWeek: null, err: {}, scroll: null };
   return ui.bd;
 }
 
@@ -355,6 +356,35 @@ function renderPast(){
     ${rows || '<div class="bd-hint">your first finished week will show up here</div>'}</div>`;
 }
 
+function cleanUrl(u){
+  u = (u || '').trim();
+  if(!u) return '';
+  if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try{ const x = new URL(u); return (x.protocol === 'http:' || x.protocol === 'https:') ? x.href : ''; }catch(e){ return ''; }
+}
+function renderWishlist(){
+  const d = BD(), items = B().wishlist;
+  const open = items.filter(i => !i.got), got = items.filter(i => i.got);
+  const total = sum(open, i => Number(i.price) || 0);
+  const row = i => {
+    let host = '';
+    try{ host = new URL(i.url).hostname.replace(/^www\./, ''); }catch(e){}
+    return `<div class="bd-wish ${i.got ? 'got' : ''}"><span class="bd-check ${i.got ? 'on' : ''}" data-bdwgot="${i.id}" title="${i.got ? 'put back on list' : 'I got it'}">${i.got ? '✓' : ''}</span>
+      <span class="t">${i.url ? `<a href="${attr(i.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(i.name)}</a>` : escapeHtml(i.name)}${host ? `<small>${escapeHtml(host)}</small>` : ''}</span>
+      <span class="a">${Number(i.price) > 0 ? money(Number(i.price)) : ''}</span><span class="bd-x" data-bdwdel="${i.id}" title="remove">✕</span></div>`;
+  };
+  return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-tape"></div>
+    <div class="bd-label">wish list <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">things I want when I can afford them</small></div>
+    <div class="bd-f"><input class="bd-note" type="text" placeholder="what is it?" maxlength="60" data-bdin="xName" value="${attr(d.xName)}" />
+      <input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ price" data-bdin="xPrice" value="${attr(d.xPrice)}" /></div>
+    <div class="bd-f"><input class="bd-note" type="text" inputmode="url" placeholder="link (optional)" data-bdin="xUrl" value="${attr(d.xUrl)}" /></div>
+    <div class="bd-f"><button class="bd-btn" id="bdWishAdd">add to wish list</button><span class="bd-err">${escapeHtml(d.err.wish || '')}</span></div>
+    ${open.map(row).join('') || '<div class="bd-hint">nothing on the list yet</div>'}
+    ${open.length ? `<div class="bd-sumrow"><span>total to save for</span><b>${money(total)}</b></div>` : ''}
+    ${got.length ? `<div class="bd-grp">got it</div>${got.map(row).join('')}` : ''}
+  </div>`;
+}
+
 function renderSetup(){
   return `<div class="bd-card bd-setup"><div class="bd-pin"></div>
     <div class="bd-label">set up my plan</div>
@@ -406,7 +436,7 @@ export function renderBudget(){
     ${renderBanner()}
     ${renderHero(ws)}
     <div class="bd-grid">${renderWork(ws)}${renderIncomeCard()}${renderPreview()}</div>
-    <div class="bd-grid">${renderLines(ws)}<div>${renderPurchase()}${renderRecent()}${renderPast()}</div></div>
+    <div class="bd-grid">${renderLines(ws)}<div>${renderPurchase()}${renderRecent()}${renderWishlist()}${renderPast()}</div></div>
     <div class="bd-foot"><span class="bd-link" id="bdEditPlan">edit my plan</span></div>
     ${renderPlanModal()}`;
 }
@@ -495,6 +525,25 @@ export function attachBudgetEvents(){
     if(!d.pLine){ d.err.buy = 'add a budget line first'; render(); return; }
     B().purchases.push({ id: uid(), line: d.pLine, amt, note: (d.pNote || '').trim(), date: todayStr(), ts: Date.now() });
     d.pAmt = ''; d.pNote = ''; d.err.buy = '';
+    render(); saveData();
+  });
+
+  // wish list
+  on('bdWishAdd', () => {
+    const name = (d.xName || '').trim();
+    if(!name){ d.err.wish = 'what do you want to get?'; render(); return; }
+    const url = cleanUrl(d.xUrl);
+    if((d.xUrl || '').trim() && !url){ d.err.wish = "that link doesn't look right"; render(); return; }
+    B().wishlist.push({ id: uid(), name, url, price: num(d.xPrice), got: false, ts: Date.now() });
+    d.xName = ''; d.xUrl = ''; d.xPrice = ''; d.err.wish = '';
+    render(); saveData();
+  });
+  document.querySelectorAll('[data-bdwgot]').forEach(el => el.onclick = () => {
+    const it = B().wishlist.find(x => x.id === el.getAttribute('data-bdwgot'));
+    if(it){ it.got = !it.got; render(); saveData(); }
+  });
+  document.querySelectorAll('[data-bdwdel]').forEach(el => el.onclick = () => {
+    B().wishlist = B().wishlist.filter(x => x.id !== el.getAttribute('data-bdwdel'));
     render(); saveData();
   });
 

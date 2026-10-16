@@ -195,7 +195,10 @@ function saveDestinations(){
 
 // ---------- work + paydays ----------
 const unpaidWork = srcId => B().work.filter(w => w.src === srcId && !w.paid);
-const workPay = list => sum(list, w => w.amt);
+// Shifts are logged at the full amount; some employers take taxes out before paying, so
+// "what will land" is the logged amount minus that source's withheld %.
+const netAmt = w => { const sc = srcById(w.src); return r2((Number(w.amt) || 0) * (1 - ((sc && Number(sc.withheldPct)) || 0) / 100)); };
+const workPay = list => sum(list, netAmt);
 function lastPayday(dow, today){ return addDays(today, -((parseDay(today).getDay() - dow + 7) % 7)); }
 function nextPayday(dow, today){ return addDays(today, (dow - parseDay(today).getDay() + 7) % 7); }
 // Which payday a deposit entered today belongs to: the one just passed (within 2 days),
@@ -263,7 +266,7 @@ function renderBanner(){
 
 function renderHero(ws){
   const b = B();
-  const worked = sum(b.work.filter(w => inWeek(w, ws)), w => w.amt);
+  const worked = workPay(b.work.filter(w => inWeek(w, ws)));
   const funded = fundedFor(ws);
   const covered = Math.min(planTotal(), sum(Object.values(funded).map(v => ({ v })), x => x.v));
   const short = orderedLines().filter(l => (funded[l.id] || 0) < (Number(l.target) || 0) - 0.004 && (Number(l.target) || 0) > 0);
@@ -295,12 +298,12 @@ function renderWork(ws){
   B().sources.forEach(s => {
     const mine = weekWork.filter(w => w.src === s.id);
     if(s.mode === 'hours'){
-      const h = sum(mine, w => w.hours || 0), pay = workPay(mine);
+      const h = sum(mine, w => w.hours || 0), pay = sum(mine, w => w.amt);
       summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${h > 0 ? `${h} h · ${money(pay)} · ${money(pay / h)}/hr` : 'none yet'}</b></div>`;
       if(s.hoursGoal > 0) summary += `<div class="bd-bar" style="margin:2px 0 8px;"><i style="width:${Math.min(100, h / s.hoursGoal * 100)}%"></i></div>`;
     } else {
       const full = mine.filter(w => w.type === 'full').length, half = mine.filter(w => w.type === 'half').length;
-      summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${(full || half) ? `${[full ? full + ' full' : '', half ? half + ' half' : ''].filter(Boolean).join(' + ')} · ${money(workPay(mine))}` : 'none yet'}</b></div>`;
+      summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${(full || half) ? `${[full ? full + ' full' : '', half ? half + ' half' : ''].filter(Boolean).join(' + ')} · ${money(sum(mine, w => w.amt))}` : 'none yet'}</b></div>`;
     }
   });
   const unpaid = B().sources.map(s => { const a = workPay(unpaidWork(s.id)); const np = nextPayday(s.payDay, todayStr()), nowAmt = workPay(payableOn(s, np)); return a > 0 ? `<div class="bd-unpaid"><span>${escapeHtml(s.name)} not paid yet: <b>${money(a)}</b> <small>· ${nowAmt > 0 ? `${money(nowAmt)} arrives ${np === todayStr() ? 'today' : dayLabel(np)}` : `next payday ${dayLabel(np)} won't include these`}</small></span><button class="bd-btn sm" data-bdpay="${s.id}">I got paid for this</button></div>` : ''; }).join('');
@@ -515,6 +518,7 @@ function renderPlanModal(){
     <input type="text" data-bdp="src|${i}|name" placeholder="name" maxlength="24" value="${attr(s.name)}" />
     <div class="bd-plan-row"><label>pays on</label><select data-bdp="src|${i}|payDay">${dayOpts(s.payDay)}</select></div>
     <div class="bd-plan-row"><label>days from a shift until its payday</label><input type="number" inputmode="numeric" data-bdp="src|${i}|holdDays" value="${attr(s.holdDays === undefined ? 1 : s.holdDays)}" /></div>
+    <div class="bd-plan-row"><label>% they take out before paying me</label><input type="number" inputmode="decimal" data-bdp="src|${i}|withheldPct" value="${attr(s.withheldPct || '')}" /></div>
     <div class="bd-plan-row"><label>set aside for taxes %</label><input type="number" inputmode="decimal" data-bdp="src|${i}|taxPct" value="${attr(s.taxPct)}" /></div>
     ${s.mode === 'hours' ? `<div class="bd-plan-row"><label>weekly hours goal</label><input type="number" inputmode="decimal" data-bdp="src|${i}|hoursGoal" value="${attr(s.hoursGoal || '')}" /></div>`
       : `<div class="bd-plan-row"><label>full day pay $</label><input type="number" inputmode="decimal" data-bdp="src|${i}|full" value="${attr(s.full || '')}" /></div>

@@ -173,6 +173,14 @@ const unpaidWork = srcId => B().work.filter(w => w.src === srcId && !w.paid);
 const workPay = list => sum(list, w => w.amt);
 function lastPayday(dow, today){ return addDays(today, -((parseDay(today).getDay() - dow + 7) % 7)); }
 function nextPayday(dow, today){ return addDays(today, (dow - parseDay(today).getDay() + 7) % 7); }
+// Which payday a deposit entered today belongs to: the one just passed (within 2 days),
+// otherwise the one coming up if it's within 2 days (paid early), otherwise the last one.
+function payDateFor(s, today){
+  const last = lastPayday(s.payDay, today), next = nextPayday(s.payDay, today);
+  if(daysBetween(last, today) <= 2) return last;
+  if(daysBetween(today, next) <= 2) return next;
+  return last;
+}
 // days between a shift and the payday that includes it (1 = paid the next time payday comes around;
 // e.g. 12 = a shift on Sunday the 4th is paid on Friday the 16th)
 const holdOf = s => (s.holdDays === undefined || s.holdDays === null || s.holdDays === '') ? 1 : Number(s.holdDays);
@@ -589,7 +597,7 @@ export function attachBudgetEvents(){
   // "I got paid for this" / payday prompt -> prefill the deposit form
   document.querySelectorAll('[data-bdpay]').forEach(el => el.onclick = () => {
     const id = el.getAttribute('data-bdpay');
-    const sc = srcById(id), pay = workPay(payableOn(sc, lastPayday(sc.payDay, todayStr())));
+    const sc = srcById(id), pay = workPay(payableOn(sc, payDateFor(sc, todayStr())));
     d.iSrc = id; d.iAmt = pay > 0 ? String(pay) : ''; d.preview = null; d.scroll = 'iamt';
     render();
   });
@@ -609,7 +617,7 @@ export function attachBudgetEvents(){
     if(!pv) return;
     const today = todayStr();
     const sc = srcById(pv.src.id);
-    const paid = payableOn(sc, lastPayday(sc.payDay, today));
+    const paid = payableOn(sc, payDateFor(sc, today));
     paid.forEach(w => { w.paid = true; });
     B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
     d.preview = null; d.iAmt = '';

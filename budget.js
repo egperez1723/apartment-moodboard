@@ -55,7 +55,7 @@ function B(){
   return b;
 }
 function BD(){
-  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', preview: null, openWeek: null, err: {}, scroll: null };
+  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', wDate: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', preview: null, openWeek: null, err: {}, scroll: null };
   return ui.bd;
 }
 
@@ -145,12 +145,18 @@ function saveDestinations(){
 const unpaidWork = srcId => B().work.filter(w => w.src === srcId && !w.paid);
 const workPay = list => sum(list, w => w.amt);
 function lastPayday(dow, today){ return addDays(today, -((parseDay(today).getDay() - dow + 7) % 7)); }
+function nextPayday(dow, today){ return addDays(today, (dow - parseDay(today).getDay() + 7) % 7); }
+// days between a shift and the payday that includes it (1 = paid the next time payday comes around;
+// e.g. 12 = a shift on Sunday the 4th is paid on Friday the 16th)
+const holdOf = s => (s.holdDays === undefined || s.holdDays === null || s.holdDays === '') ? 1 : Number(s.holdDays);
+// unpaid shifts that a payday on `payDate` would cover
+const payableOn = (s, payDate) => unpaidWork(s.id).filter(w => w.date <= addDays(payDate, -holdOf(s)));
 function paydayPrompts(){
   const today = todayStr();
   return B().sources.map(s => {
     const d = lastPayday(s.payDay, today);
     if(daysBetween(d, today) > 2) return null;       // payday + 2 days of grace
-    const amt = workPay(unpaidWork(s.id).filter(w => w.date < d));
+    const amt = workPay(payableOn(s, d));
     return amt > 0 ? { src: s, amt } : null;
   }).filter(Boolean);
 }
@@ -237,12 +243,13 @@ function renderWork(ws){
       summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${(full || half) ? `${[full ? full + ' full' : '', half ? half + ' half' : ''].filter(Boolean).join(' + ')} · ${money(workPay(mine))}` : 'none yet'}</b></div>`;
     }
   });
-  const unpaid = B().sources.map(s => { const a = workPay(unpaidWork(s.id)); return a > 0 ? `<div class="bd-unpaid"><span>${escapeHtml(s.name)} not paid yet: <b>${money(a)}</b> <small>· pays ${DAY_NAMES[s.payDay].slice(0, 3)}</small></span><button class="bd-btn sm" data-bdpay="${s.id}">I got paid for this</button></div>` : ''; }).join('');
+  const unpaid = B().sources.map(s => { const a = workPay(unpaidWork(s.id)); const np = nextPayday(s.payDay, todayStr()), nowAmt = workPay(payableOn(s, np)); return a > 0 ? `<div class="bd-unpaid"><span>${escapeHtml(s.name)} not paid yet: <b>${money(a)}</b> <small>· ${nowAmt > 0 ? `${money(nowAmt)} arrives ${np === todayStr() ? 'today' : dayLabel(np)}` : `next payday ${dayLabel(np)} won't include these`}</small></span><button class="bd-btn sm" data-bdpay="${s.id}">I got paid for this</button></div>` : ''; }).join('');
   return `<div class="bd-card"><div class="bd-tape"></div>
     <div class="bd-label">work time</div>
     <div class="bd-seg">${opts.map((o, i) => `<span class="${i === d.wOpt ? 'on' : ''}" data-bdwopt="${i}">${escapeHtml(o.label)}</span>`).join('')}</div>
     ${isShift ? `<div class="bd-f"><label>hours worked</label><input class="bd-amt" type="number" inputmode="decimal" step="0.25" placeholder="hours" data-bdin="wHours" value="${attr(d.wHours)}" />
       <label>I made</label><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ I made" data-bdin="wMade" value="${attr(d.wMade)}" /></div>` : ''}
+    <div class="bd-f"><label>worked on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="wDate" value="${attr(d.wDate || todayStr())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdWorkAdd">${isShift ? 'log shift' : 'log time'}</button><span class="bd-err">${escapeHtml(d.err.work || '')}</span></div>
     ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">You know your pay right after a shift. It counts as "on its way" until payday, when I'll show where it goes.</div>` : ''}
     ${summary}${unpaid}
@@ -409,6 +416,7 @@ function renderPlanModal(){
     <div class="bd-hint">income source ${i + 1} · ${s.mode === 'hours' ? 'paid by the hour' : 'paid by the day'}</div>
     <input type="text" data-bdp="src|${i}|name" placeholder="name" maxlength="24" value="${attr(s.name)}" />
     <div class="bd-plan-row"><label>pays on</label><select data-bdp="src|${i}|payDay">${dayOpts(s.payDay)}</select></div>
+    <div class="bd-plan-row"><label>days from a shift until its payday</label><input type="number" inputmode="numeric" data-bdp="src|${i}|holdDays" value="${attr(s.holdDays === undefined ? 1 : s.holdDays)}" /></div>
     <div class="bd-plan-row"><label>set aside for taxes %</label><input type="number" inputmode="decimal" data-bdp="src|${i}|taxPct" value="${attr(s.taxPct)}" /></div>
     ${s.mode === 'hours' ? `<div class="bd-plan-row"><label>weekly hours goal</label><input type="number" inputmode="decimal" data-bdp="src|${i}|hoursGoal" value="${attr(s.hoursGoal || '')}" /></div>`
       : `<div class="bd-plan-row"><label>full day pay $</label><input type="number" inputmode="decimal" data-bdp="src|${i}|full" value="${attr(s.full || '')}" /></div>
@@ -484,7 +492,7 @@ export function attachBudgetEvents(){
 
   // log work
   on('bdWorkAdd', () => {
-    const cur = workOptions()[d.wOpt], today = todayStr();
+    const cur = workOptions()[d.wOpt], today = (d.wDate && d.wDate <= todayStr()) ? d.wDate : todayStr();
     if(cur.type === 'shift'){
       const hours = num(d.wHours), made = num(d.wMade);
       if(!(hours > 0) || !(made > 0)){ d.err.work = 'enter your hours and what you made'; render(); return; }
@@ -495,14 +503,15 @@ export function attachBudgetEvents(){
       if(!(amt > 0)){ d.err.work = `set your ${cur.type} day pay in my plan first`; render(); return; }
       B().work.push({ id: uid(), src: cur.src.id, type: cur.type, hours: 0, amt, date: today, paid: false, ts: Date.now() });
     }
-    d.err.work = '';
+    d.err.work = ''; d.wDate = '';
     render(); saveData();
   });
 
   // "I got paid for this" / payday prompt -> prefill the deposit form
   document.querySelectorAll('[data-bdpay]').forEach(el => el.onclick = () => {
     const id = el.getAttribute('data-bdpay');
-    d.iSrc = id; d.iAmt = String(workPay(unpaidWork(id))); d.preview = null; d.scroll = 'iamt';
+    const sc = srcById(id), pay = workPay(payableOn(sc, lastPayday(sc.payDay, todayStr())));
+    d.iSrc = id; d.iAmt = pay > 0 ? String(pay) : ''; d.preview = null; d.scroll = 'iamt';
     render();
   });
 
@@ -520,7 +529,8 @@ export function attachBudgetEvents(){
     const pv = d.preview;
     if(!pv) return;
     const today = todayStr();
-    const paid = unpaidWork(pv.src.id).filter(w => w.date < today);
+    const sc = srcById(pv.src.id);
+    const paid = payableOn(sc, lastPayday(sc.payDay, today));
     paid.forEach(w => { w.paid = true; });
     B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
     d.preview = null; d.iAmt = '';

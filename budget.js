@@ -433,10 +433,11 @@ function renderRecent(){
   b.moves.filter(m => m.dest !== 'skipped').forEach(m => items.push({ k: 'save', kind: 'move', id: m.id, date: m.date, ts: 0, t: `Moved leftover to ${escapeHtml(m.dest)}`, s: weekLabel(m.week), a: m.amt }));
   items.sort((x, y) => y.date.localeCompare(x.date) || y.ts - x.ts);
   const icon = { in: '↓', out: '↑', work: '⏱', save: '★' };
-  const rows = items.slice(0, 8).map(e => `<div class="bd-act"><span class="bd-ico i-${e.k}">${icon[e.k]}</span><span class="d">${dayLabel(e.date)}</span>
+  const d = BD(), shown = d.recentAll ? items : items.slice(0, 8);
+  const rows = shown.map(e => `<div class="bd-act"><span class="bd-ico i-${e.k}">${icon[e.k]}</span><span class="d">${dayLabel(e.date)}</span>
       <span class="t">${e.t}${e.s ? ` <small>· ${e.s}</small>` : ''}</span><span class="a ${e.k === 'in' ? 'in' : ''}">${e.k === 'in' ? '+' : (e.k === 'out' ? '−' : '')}${money(e.a)}</span>
       ${e.kind !== 'move' ? `<span class="bd-x" data-bddel="${e.kind}|${e.id}" title="delete">✕</span>` : ''}</div>`).join('');
-  return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-label">recent</div>${rows || '<div class="bd-hint">nothing logged yet</div>'}</div>`;
+  return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-label">recent</div>${rows || '<div class="bd-hint">nothing logged yet</div>'}${items.length > 8 ? `<div style="margin-top:8px;"><span class="bd-link" id="bdRecentMore">${d.recentAll ? 'show fewer' : `show all ${items.length}`}</span></div>` : ''}</div>`;
 }
 
 function renderPast(){
@@ -597,6 +598,7 @@ export function attachBudgetEvents(){
   });
 
   const on = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; };
+  on('bdRecentMore', () => { d.recentAll = !d.recentAll; render(); });
   on('bdSetup', openPlan); on('bdEditPlan', openPlan);
 
   document.querySelectorAll('[data-bdwopt]').forEach(el => el.onclick = () => { d.wOpt = Number(el.getAttribute('data-bdwopt')); d.err.work = ''; render(); });

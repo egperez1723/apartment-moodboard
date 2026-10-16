@@ -49,6 +49,29 @@ function defaultBudget(){
     income: [], purchases: [], work: [], moves: []
   };
 }
+// Re-split a week's deposits across the current lines (priority order), keeping each deposit's tax.
+// Needed when the plan changes after money was already split under the old lines.
+function reflowWeek(b, ws){
+  const order = GROUPS.flatMap(g => b.lines.filter(l => l.group === g.id));
+  const inc = b.income.filter(e => weekStart(e.date) === ws).sort((x, y) => (x.ts || 0) - (y.ts || 0) || x.date.localeCompare(y.date));
+  const funded = {};
+  inc.forEach(e => {
+    let left = r2((Number(e.amt) || 0) - (Number(e.tax) || 0));
+    const parts = {};
+    order.forEach(l => {
+      const need = r2((Number(l.target) || 0) - (funded[l.id] || 0));
+      if(need <= 0 || left <= 0) return;
+      const give = r2(Math.min(need, left));
+      parts[l.id] = give; funded[l.id] = r2((funded[l.id] || 0) + give); left = r2(left - give);
+    });
+    e.parts = parts; e.extra = left;
+  });
+}
+function healIncome(b){
+  const ids = new Set(b.lines.map(l => l.id)), bad = new Set();
+  b.income.forEach(e => { if(Object.keys(e.parts || {}).some(id => !ids.has(id))) bad.add(weekStart(e.date)); });
+  bad.forEach(ws => reflowWeek(b, ws));
+}
 function B(){
   if(!store.data.budget) store.data.budget = defaultBudget();
   const b = store.data.budget;
@@ -56,6 +79,7 @@ function B(){
   if(!Array.isArray(b.sources) || b.sources.length === 0) b.sources = defaultBudget().sources;
   if(typeof b.weeklyGoal !== 'number') b.weeklyGoal = 0;
   if(typeof b.cushion !== 'number') b.cushion = 0;
+  if(b.lines.length && b.income.length) healIncome(b);
   return b;
 }
 function BD(){
@@ -82,6 +106,7 @@ export function buildBudget(existing, patch){
   if(patch.goals) b.goals = patch.goals.map(g => { const o = b.goals.find(x => key(x.name) === key(g.name)); return { id: o ? o.id : uid(), name: g.name, total: Number(g.total) || 0, due: g.due || '', paid: Number(g.paid) || 0, lineId: lineId(g.line) }; });
   if(patch.buckets) b.buckets = patch.buckets.map(k => { const o = b.buckets.find(x => key(x.name) === key(k.name)); return { id: o ? o.id : uid(), name: k.name, balance: Number(k.balance) || 0, locked: !!k.locked }; });
   if(patch.cushion !== undefined) b.cushion = Number(patch.cushion) || 0;
+  if(patch.lines) healIncome(b);
   if(patch.weeklyGoal !== undefined) b.weeklyGoal = Number(patch.weeklyGoal) || 0;
   return b;
 }
@@ -738,6 +763,7 @@ export function attachBudgetEvents(){
       b.goals = p.goals.filter(g => (g.name || '').trim()).map(g => ({ id: g.id, name: g.name.trim(), total: num(g.total), due: g.due || '', paid: num(g.paid), lineId: g.lineId || '' }));
       b.buckets = p.buckets.filter(k => (k.name || '').trim()).map(k => ({ id: k.id, name: k.name.trim(), balance: num(k.balance), locked: !!k.locked }));
       b.cushion = num(p.cushion);
+      reflowWeek(b, weekStart(todayStr()));
       ui.bdPlan = null;
       render(); saveData();
     });

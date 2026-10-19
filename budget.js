@@ -24,6 +24,7 @@
 //   goals     savings goals with a progress bar: {id, name, total, due, paid, lineId} (lineId = the weekly savings line that feeds it)
 //   buckets   money set aside that isn't touched: {id, name, balance, locked}
 //   cushion   minimum to keep in checking
+//   recurring monthly charges that log themselves: {id, name, amt, day, lineId, since, posted:[dates]}
 //   expected  exact amounts you know are coming: {id, src, amt, date}
 // Weeks run Sunday to Saturday, in local time.
 
@@ -76,7 +77,7 @@ function healIncome(b){
 function B(){
   if(!store.data.budget) store.data.budget = defaultBudget();
   const b = store.data.budget;
-  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
+  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!Array.isArray(b.sources) || b.sources.length === 0) b.sources = defaultBudget().sources;
   if(typeof b.weeklyGoal !== 'number') b.weeklyGoal = 0;
   if(typeof b.cushion !== 'number') b.cushion = 0;
@@ -92,7 +93,7 @@ function BD(){
 // Lines and goals are matched by name so funded history stays attached.
 export function buildBudget(existing, patch){
   const b = existing ? JSON.parse(JSON.stringify(existing)) : defaultBudget();
-  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
+  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!Array.isArray(b.sources) || !b.sources.length) b.sources = defaultBudget().sources;
   const key = x => (x || '').trim().toLowerCase();
   (patch.sources || []).forEach(ps => {
@@ -106,6 +107,7 @@ export function buildBudget(existing, patch){
   const lineId = name => { const l = b.lines.find(x => key(x.name) === key(name)); return l ? l.id : ''; };
   if(patch.goals) b.goals = patch.goals.map(g => { const o = b.goals.find(x => key(x.name) === key(g.name)); return { id: o ? o.id : uid(), name: g.name, total: Number(g.total) || 0, due: g.due || '', paid: Number(g.paid) || 0, lineId: lineId(g.line) }; });
   if(patch.buckets) b.buckets = patch.buckets.map(k => { const o = b.buckets.find(x => key(x.name) === key(k.name)); return { id: o ? o.id : uid(), name: k.name, balance: Number(k.balance) || 0, locked: !!k.locked }; });
+  if(patch.recurring) b.recurring = patch.recurring.map(r => { const o = b.recurring.find(x => key(x.name) === key(r.name)); return { id: o ? o.id : uid(), name: r.name, amt: Number(r.amt) || 0, day: Number(r.day) || 1, lineId: lineId(r.line), since: r.since || (o ? o.since : todayStr()), posted: o ? o.posted || [] : [] }; });
   if(patch.cushion !== undefined) b.cushion = Number(patch.cushion) || 0;
   if(patch.lines) healIncome(b);
   if(patch.weeklyGoal !== undefined) b.weeklyGoal = Number(patch.weeklyGoal) || 0;
@@ -136,6 +138,28 @@ const dayLabel = s => parseDay(s).toLocaleDateString(undefined, { weekday: 'shor
 const viewWeek = () => addDays(weekStart(todayStr()), 7 * (BD().wkOff || 0));
 const defDate = () => (BD().wkOff || 0) === 0 ? todayStr() : addDays(viewWeek(), 6);
 const pickDate = v => (v && v <= todayStr()) ? v : defDate();
+
+// Post any monthly charges that have come due since the last time the app was opened.
+function daysInMonth(y, m){ return new Date(y, m + 1, 0).getDate(); }
+function applyRecurring(){
+  const b = B(), today = todayStr();
+  let changed = false;
+  b.recurring.forEach(r => {
+    if(!r.since || !(r.amt > 0) || !lineById(r.lineId)) return;
+    if(!Array.isArray(r.posted)) r.posted = [];
+    const from = parseDay(r.since), to = parseDay(today);
+    let y = from.getFullYear(), m = from.getMonth();
+    while(y < to.getFullYear() || (y === to.getFullYear() && m <= to.getMonth())){
+      const date = `${y}-${pad(m + 1)}-${pad(Math.min(Number(r.day) || 1, daysInMonth(y, m)))}`;
+      if(date >= r.since && date <= today && !r.posted.includes(date)){
+        b.purchases.push({ id: uid(), line: r.lineId, amt: r.amt, note: r.name, date, ts: Date.now(), rec: true });
+        r.posted.push(date); changed = true;
+      }
+      m++; if(m > 11){ m = 0; y++; }
+    }
+  });
+  return changed;
+}
 
 function orderedLines(){
   const lines = B().lines;
@@ -539,6 +563,13 @@ function renderPlanModal(){
     <div class="bd-plan-h">income</div>${srcBlocks}
     <div class="bd-plan-row"><label>weekly pay goal $</label><input type="number" inputmode="decimal" data-bdp="goal" value="${attr(p.weeklyGoal || '')}" /></div>
     <div class="bd-plan-row"><label>keep in checking at least $</label><input type="number" inputmode="decimal" data-bdp="cushion" value="${attr(p.cushion || '')}" /></div>
+    <div class="bd-plan-h">monthly charges (log themselves)</div>
+    ${p.recurring.map((r, i) => `<div class="bd-plan-src"><input type="text" data-bdp="rec|${i}|name" placeholder="name, like Claude" maxlength="30" value="${attr(r.name)}" />
+      <div class="bd-plan-row"><label>amount $ (with tax)</label><input type="number" inputmode="decimal" data-bdp="rec|${i}|amt" value="${attr(r.amt || '')}" /></div>
+      <div class="bd-plan-row"><label>charged on day of month</label><input type="number" inputmode="numeric" min="1" max="31" data-bdp="rec|${i}|day" value="${attr(r.day || '')}" /></div>
+      <div class="bd-plan-row"><label>counts toward</label><select data-bdp="rec|${i}|lineId">${p.lines.filter(l => l.group !== 'save').map(l => `<option value="${l.id}" ${l.id === r.lineId ? 'selected' : ''}>${escapeHtml(l.name || 'unnamed')}</option>`).join('')}</select></div>
+      <span class="bd-link" data-bdrdel="${i}">remove this charge</span></div>`).join('')}
+    <span class="bd-link" id="bdRecAdd">+ add a monthly charge</span>
     <div class="bd-plan-h">savings goals</div>
     ${p.goals.map((g, i) => `<div class="bd-plan-src"><input type="text" data-bdp="goals|${i}|name" placeholder="goal name" maxlength="30" value="${attr(g.name)}" />
       <div class="bd-plan-row"><label>total $</label><input type="number" inputmode="decimal" data-bdp="goals|${i}|total" value="${attr(g.total || '')}" /></div>
@@ -567,6 +598,7 @@ function renderPlanModal(){
 export function renderBudget(){
   B();
   if(B().lines.length === 0) return renderSetup() + renderPlanModal();
+  if(applyRecurring()) setTimeout(() => saveData(), 0);
   const ws = viewWeek(), off = BD().wkOff || 0;
   const wkName = off === 0 ? 'this week' : (off === -1 ? 'last week' : `${-off} weeks ago`);
   return `<div class="bd-weeknav"><span class="bd-navbtn" id="bdWkPrev" title="earlier week">‹</span><span class="bd-weeklabel">${wkName} · ${weekLabel(ws)}</span><span class="bd-navbtn ${off === 0 ? 'off' : ''}" id="bdWkNext" title="later week">›</span></div>
@@ -583,7 +615,7 @@ export function renderBudget(){
 // ---------- events ----------
 function openPlan(){
   const b = B();
-  ui.bdPlan = { sources: JSON.parse(JSON.stringify(b.sources)), weeklyGoal: b.weeklyGoal || 0, lines: JSON.parse(JSON.stringify(b.lines)), goals: JSON.parse(JSON.stringify(b.goals)), buckets: JSON.parse(JSON.stringify(b.buckets)), cushion: b.cushion || 0, quick: '' };
+  ui.bdPlan = { sources: JSON.parse(JSON.stringify(b.sources)), weeklyGoal: b.weeklyGoal || 0, lines: JSON.parse(JSON.stringify(b.lines)), goals: JSON.parse(JSON.stringify(b.goals)), recurring: JSON.parse(JSON.stringify(b.recurring)), buckets: JSON.parse(JSON.stringify(b.buckets)), cushion: b.cushion || 0, quick: '' };
   render();
 }
 function parseQuick(text){
@@ -751,7 +783,10 @@ export function attachBudgetEvents(){
         const v = el.value;
         if(parts[0] === 'goal') p.weeklyGoal = num(v);
         else if(parts[0] === 'cushion') p.cushion = num(v);
-        else if(parts[0] === 'goals'){
+        else if(parts[0] === 'rec'){
+          const r = p.recurring[Number(parts[1])], f = parts[2];
+          r[f] = (f === 'amt' || f === 'day') ? num(v) : v;
+        } else if(parts[0] === 'goals'){
           const g = p.goals[Number(parts[1])], f = parts[2];
           g[f] = (f === 'total' || f === 'paid') ? num(v) : v;
         } else if(parts[0] === 'buckets'){
@@ -774,6 +809,8 @@ export function attachBudgetEvents(){
     on('bdPlanClose', closePlan); on('bdPlanCancel', closePlan);
     const ov = document.getElementById('bdPlanOverlay');
     if(ov) ov.addEventListener('click', e => { if(e.target === ov) closePlan(); });
+    on('bdRecAdd', () => { const first = p.lines.find(l => l.group !== 'save'); p.recurring.push({ id: uid(), name: '', amt: 0, day: 1, lineId: first ? first.id : '', since: '', posted: [] }); render(); });
+    document.querySelectorAll('[data-bdrdel]').forEach(el => el.onclick = () => { p.recurring.splice(Number(el.getAttribute('data-bdrdel')), 1); render(); });
     on('bdGoalAdd', () => { p.goals.push({ id: uid(), name: '', total: 0, due: '', paid: 0, lineId: '' }); render(); });
     document.querySelectorAll('[data-bdgdel]').forEach(el => el.onclick = () => { p.goals.splice(Number(el.getAttribute('data-bdgdel')), 1); render(); });
     on('bdBucketAdd', () => { p.buckets.push({ id: uid(), name: '', balance: 0, locked: true }); render(); });
@@ -790,6 +827,14 @@ export function attachBudgetEvents(){
       b.sources = p.sources.map(s => Object.assign({}, s, { name: (s.name || '').trim() || 'income' }));
       b.weeklyGoal = Number(p.weeklyGoal) || 0;
       b.lines = p.lines.filter(l => (l.name || '').trim()).map(l => ({ id: l.id, name: l.name.trim(), target: num(l.target), group: l.group }));
+      const keepRec = {}; b.recurring.forEach(r => { keepRec[r.id] = r; });
+      b.recurring = p.recurring.filter(r => (r.name || '').trim() && num(r.amt) > 0).map(r => {
+        const o = keepRec[r.id], day = Math.min(31, Math.max(1, Math.round(num(r.day)) || 1)), t = todayStr(), td = parseDay(t);
+        // first charge to log: the latest occurrence of that day on or before today (so a charge from today gets logged)
+        let since = o && o.since;
+        if(!since){ const dim = daysInMonth(td.getFullYear(), td.getMonth()), thisM = ymd(new Date(td.getFullYear(), td.getMonth(), Math.min(day, dim))); since = thisM <= t ? thisM : ymd(new Date(td.getFullYear(), td.getMonth() - 1, Math.min(day, daysInMonth(td.getFullYear(), td.getMonth() - 1)))); }
+        return { id: r.id, name: r.name.trim(), amt: num(r.amt), day, lineId: r.lineId, since, posted: o ? o.posted || [] : [] };
+      });
       b.goals = p.goals.filter(g => (g.name || '').trim()).map(g => ({ id: g.id, name: g.name.trim(), total: num(g.total), due: g.due || '', paid: num(g.paid), lineId: g.lineId || '' }));
       b.buckets = p.buckets.filter(k => (k.name || '').trim()).map(k => ({ id: k.id, name: k.name.trim(), balance: num(k.balance), locked: !!k.locked }));
       b.cushion = num(p.cushion);

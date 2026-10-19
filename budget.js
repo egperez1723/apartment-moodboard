@@ -84,7 +84,7 @@ function B(){
   return b;
 }
 function BD(){
-  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', wDate: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', eSrc: null, eAmt: '', eDate: '', preview: null, openWeek: null, err: {}, scroll: null };
+  if(!ui.bd) ui.bd = { wOpt: 0, wHours: '', wMade: '', wDate: '', iSrc: null, iAmt: '', pAmt: '', pLine: '', pNote: '', xName: '', xUrl: '', xPrice: '', wkOff: 0, pDate: '', iDate: '', eSrc: null, eAmt: '', eDate: '', preview: null, openWeek: null, err: {}, scroll: null };
   return ui.bd;
 }
 
@@ -131,6 +131,11 @@ function weekLabel(ws){
   return a.getMonth() === b.getMonth() ? `${mo(a)} ${a.getDate()} – ${b.getDate()}` : `${mo(a)} ${a.getDate()} – ${mo(b)} ${b.getDate()}`;
 }
 const dayLabel = s => parseDay(s).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+// The week being looked at (0 = this week, -1 = last week, ...) and the date new entries get by default.
+const viewWeek = () => addDays(weekStart(todayStr()), 7 * (BD().wkOff || 0));
+const defDate = () => (BD().wkOff || 0) === 0 ? todayStr() : addDays(viewWeek(), 6);
+const pickDate = v => (v && v <= todayStr()) ? v : defDate();
 
 function orderedLines(){
   const lines = B().lines;
@@ -308,7 +313,7 @@ function renderWork(ws){
     <div class="bd-seg">${opts.map((o, i) => `<span class="${i === d.wOpt ? 'on' : ''}" data-bdwopt="${i}">${escapeHtml(o.label)}</span>`).join('')}</div>
     ${isShift ? `<div class="bd-f"><label>hours worked</label><input class="bd-amt" type="number" inputmode="decimal" step="0.25" placeholder="hours" data-bdin="wHours" value="${attr(d.wHours)}" />
       <label>I made</label><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ I made" data-bdin="wMade" value="${attr(d.wMade)}" /></div>` : ''}
-    <div class="bd-f"><label>worked on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="wDate" value="${attr(d.wDate || todayStr())}" /></div>
+    <div class="bd-f"><label>worked on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="wDate" value="${attr(d.wDate || defDate())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdWorkAdd">${isShift ? 'log shift' : 'log time'}</button><span class="bd-err">${escapeHtml(d.err.work || '')}</span></div>
     ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">Log what you made right after a shift. Money only counts toward your plan when you enter it under "I got paid".</div>` : ''}
     ${summary}
@@ -325,6 +330,7 @@ function renderIncomeCard(){
     <div class="bd-seg">${srcs.map(x => `<span class="${x.id === d.iSrc ? 'on' : ''}" data-bdisrc="${x.id}">${escapeHtml(x.name)}</span>`).join('')}</div>
     <div class="bd-f"><input id="bdIAmt" class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ amount" data-bdin="iAmt" value="${attr(d.iAmt)}" />
       ${s.taxPct > 0 ? `<span class="bd-hint">${s.taxPct}% will be set aside for taxes</span>` : ''}</div>
+    <div class="bd-f"><label>paid on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="iDate" value="${attr(d.iDate || defDate())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdIncGo">show me where it goes</button><span class="bd-err">${escapeHtml(d.err.inc || '')}</span></div>
     <div class="bd-hint">I split it by priority: taxes, then must-pays, savings, everyday, flexible.</div></div>`;
 }
@@ -332,7 +338,7 @@ function renderIncomeCard(){
 function renderPreview(){
   const pv = BD().preview;
   if(!pv) return '';
-  const { plan, amt, src } = pv, funded = fundedFor(weekStart(todayStr()));
+  const { plan, amt, src } = pv, funded = fundedFor(weekStart(pv.date || todayStr()));
   const rows = orderedLines().filter(l => plan.parts[l.id]).map(l => {
     const after = r2((funded[l.id] || 0) + plan.parts[l.id]), t = Number(l.target) || 0;
     return `<div class="bd-pvrow"><span class="n">${escapeHtml(l.name)}<small>${after >= t - 0.004 ? 'fully funded for the week' : `${money(after)} of ${money(t)} — still needs ${money(r2(t - after))}`}</small></span><b>${money(plan.parts[l.id])}</b></div>`;
@@ -422,6 +428,7 @@ function renderPurchase(){
     <div class="bd-f"><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ amount" data-bdin="pAmt" value="${attr(d.pAmt)}" />
       <select data-bdin="pLine">${lines.map(l => `<option value="${l.id}" ${l.id === d.pLine ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}</select></div>
     <div class="bd-f"><input class="bd-note" type="text" placeholder="note (optional)" maxlength="40" data-bdin="pNote" value="${attr(d.pNote)}" /></div>
+    <div class="bd-f"><label>bought on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="pDate" value="${attr(d.pDate || defDate())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdBuyAdd">add purchase</button><span class="bd-err">${escapeHtml(d.err.buy || '')}</span></div></div>`;
 }
 
@@ -560,8 +567,10 @@ function renderPlanModal(){
 export function renderBudget(){
   B();
   if(B().lines.length === 0) return renderSetup() + renderPlanModal();
-  const ws = weekStart(todayStr());
-  return `<div class="bd-weeklabel">this week · ${weekLabel(ws)}</div>
+  const ws = viewWeek(), off = BD().wkOff || 0;
+  const wkName = off === 0 ? 'this week' : (off === -1 ? 'last week' : `${-off} weeks ago`);
+  return `<div class="bd-weeknav"><span class="bd-navbtn" id="bdWkPrev" title="earlier week">‹</span><span class="bd-weeklabel">${wkName} · ${weekLabel(ws)}</span><span class="bd-navbtn ${off === 0 ? 'off' : ''}" id="bdWkNext" title="later week">›</span></div>
+    ${off === 0 ? '' : `<div class="bd-weeknote">You're looking at ${wkName}. Anything you add here is dated in that week. <span class="bd-link" id="bdWkNow">back to this week</span></div>`}
     ${renderPayStrip()}
     ${renderBanner()}
     ${renderHero(ws)}
@@ -598,6 +607,10 @@ export function attachBudgetEvents(){
   });
 
   const on = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; };
+  const setWeek = n => { d.wkOff = Math.min(0, n); d.wDate = ''; d.pDate = ''; d.iDate = ''; d.preview = null; render(); };
+  on('bdWkPrev', () => setWeek((d.wkOff || 0) - 1));
+  on('bdWkNext', () => { if((d.wkOff || 0) < 0) setWeek(d.wkOff + 1); });
+  on('bdWkNow', () => setWeek(0));
   on('bdRecentMore', () => { d.recentAll = !d.recentAll; render(); });
   on('bdSetup', openPlan); on('bdEditPlan', openPlan);
 
@@ -606,7 +619,7 @@ export function attachBudgetEvents(){
 
   // log work
   on('bdWorkAdd', () => {
-    const cur = workOptions()[d.wOpt], today = (d.wDate && d.wDate <= todayStr()) ? d.wDate : todayStr();
+    const cur = workOptions()[d.wOpt], today = pickDate(d.wDate);
     if(cur.type === 'shift'){
       const hours = num(d.wHours), made = num(d.wMade);
       if(!(hours > 0) || !(made > 0)){ d.err.work = 'enter your hours and what you made'; render(); return; }
@@ -648,7 +661,7 @@ export function attachBudgetEvents(){
     const src = srcById(d.iSrc), amt = num(d.iAmt);
     if(!(amt > 0)){ d.err.inc = 'enter the amount you were paid'; render(); return; }
     d.err.inc = '';
-    d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, plan: allocate(amt, src, weekStart(todayStr())) };
+    d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, date: pickDate(d.iDate), plan: allocate(amt, src, weekStart(pickDate(d.iDate))) };
     d.scroll = 'preview';
     render();
   });
@@ -656,13 +669,13 @@ export function attachBudgetEvents(){
   on('bdPvSave', () => {
     const pv = d.preview;
     if(!pv) return;
-    const today = todayStr();
+    const today = pv.date || todayStr();
     const sc = srcById(pv.src.id);
     const paid = payableOn(sc, payDateFor(sc, today));
     paid.forEach(w => { w.paid = true; });
     B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
     B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
-    d.preview = null; d.iAmt = '';
+    d.preview = null; d.iAmt = ''; d.iDate = '';
     render(); saveData();
   });
 
@@ -671,8 +684,8 @@ export function attachBudgetEvents(){
     const amt = num(d.pAmt);
     if(!(amt > 0)){ d.err.buy = 'enter an amount'; render(); return; }
     if(!d.pLine){ d.err.buy = 'add a budget line first'; render(); return; }
-    B().purchases.push({ id: uid(), line: d.pLine, amt, note: (d.pNote || '').trim(), date: todayStr(), ts: Date.now() });
-    d.pAmt = ''; d.pNote = ''; d.err.buy = '';
+    B().purchases.push({ id: uid(), line: d.pLine, amt, note: (d.pNote || '').trim(), date: pickDate(d.pDate), ts: Date.now() });
+    d.pAmt = ''; d.pNote = ''; d.pDate = ''; d.err.buy = '';
     render(); saveData();
   });
 

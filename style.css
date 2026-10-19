@@ -642,3 +642,8 @@
 .bd-aff{display:block;font-size:10.5px;font-weight:600;color:#93502c;}
 .bd-aff.yes{color:#4c5c41;}
 .bd-date{width:150px;}
+.bd-weeknav{display:flex;align-items:center;justify-content:center;gap:14px;margin:0 0 14px;}
+.bd-weeknav .bd-weeklabel{margin:0;min-width:190px;}
+.bd-navbtn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);background:var(--paper);color:var(--ink-soft);display:inline-flex;align-items:center;justify-content:center;font-size:20px;line-height:1;cursor:pointer;user-select:none;}
+.bd-navbtn.off{opacity:.3;cursor:default;}
+.bd-weeknote{text-align:center;font-size:12px;color:var(--ink-soft);margin:-6px 0 16px;}

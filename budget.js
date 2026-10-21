@@ -51,6 +51,8 @@ function defaultBudget(){
     income: [], purchases: [], work: [], moves: []
   };
 }
+// A line's budget is weekly unless marked monthly; monthly lines are set aside weekly at amount x 12 / 52.
+const wkTarget = l => l.period === 'month' ? Math.round((Number(l.target) || 0) * 12 / 52 * 100) / 100 : (Number(l.target) || 0);
 // Re-split a week's deposits across the current lines (priority order), keeping each deposit's tax.
 // Needed when the plan changes after money was already split under the old lines.
 function reflowWeek(b, ws){
@@ -61,7 +63,7 @@ function reflowWeek(b, ws){
     let left = r2((Number(e.amt) || 0) - (Number(e.tax) || 0));
     const parts = {};
     order.forEach(l => {
-      const need = r2((Number(l.target) || 0) - (funded[l.id] || 0));
+      const need = r2(wkTarget(l) - (funded[l.id] || 0));
       if(need <= 0 || left <= 0) return;
       const give = r2(Math.min(need, left));
       parts[l.id] = give; funded[l.id] = r2((funded[l.id] || 0) + give); left = r2(left - give);
@@ -74,11 +76,16 @@ function healIncome(b){
   b.income.forEach(e => { if(Object.keys(e.parts || {}).some(id => !ids.has(id))) bad.add(weekStart(e.date)); });
   bad.forEach(ws => reflowWeek(b, ws));
 }
+// A third income source for money that isn't a job (gifts, winnings, refunds): no shifts, no payday.
+function ensureOtherSource(b){
+  if(!b.sources.some(x => x.mode === 'other')) b.sources.push({ id: 'sother', name: 'Other', mode: 'other', taxPct: 0 });
+}
 function B(){
   if(!store.data.budget) store.data.budget = defaultBudget();
   const b = store.data.budget;
   ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!Array.isArray(b.sources) || b.sources.length === 0) b.sources = defaultBudget().sources;
+  ensureOtherSource(b);
   if(typeof b.weeklyGoal !== 'number') b.weeklyGoal = 0;
   if(typeof b.cushion !== 'number') b.cushion = 0;
   if(b.lines.length && b.income.length) healIncome(b);
@@ -95,6 +102,7 @@ export function buildBudget(existing, patch){
   const b = existing ? JSON.parse(JSON.stringify(existing)) : defaultBudget();
   ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!Array.isArray(b.sources) || !b.sources.length) b.sources = defaultBudget().sources;
+  ensureOtherSource(b);
   const key = x => (x || '').trim().toLowerCase();
   (patch.sources || []).forEach(ps => {
     let s = b.sources.find(x => key(x.name) === key(ps.name)) || b.sources.find(x => x.mode === ps.mode && /^(hourly job|day pay)$/i.test(x.name));
@@ -102,7 +110,7 @@ export function buildBudget(existing, patch){
   });
   if(patch.lines){
     const old = b.lines;
-    b.lines = patch.lines.map(l => { const o = old.find(x => key(x.name) === key(l.name)); return { id: o ? o.id : uid(), name: l.name, target: Number(l.target) || 0, group: l.group || 'spend' }; });
+    b.lines = patch.lines.map(l => { const o = old.find(x => key(x.name) === key(l.name)); return { id: o ? o.id : uid(), name: l.name, target: Number(l.target) || 0, group: l.group || 'spend', period: l.period === 'month' ? 'month' : 'week' }; });
   }
   const lineId = name => { const l = b.lines.find(x => key(x.name) === key(name)); return l ? l.id : ''; };
   if(patch.goals) b.goals = patch.goals.map(g => { const o = b.goals.find(x => key(x.name) === key(g.name)); return { id: o ? o.id : uid(), name: g.name, total: Number(g.total) || 0, due: g.due || '', paid: Number(g.paid) || 0, lineId: lineId(g.line) }; });
@@ -166,7 +174,7 @@ function orderedLines(){
   return GROUPS.flatMap(g => lines.filter(l => l.group === g.id));
 }
 const lineById = id => B().lines.find(l => l.id === id);
-const planTotal = () => r2(B().lines.reduce((s, l) => s + (Number(l.target) || 0), 0));
+const planTotal = () => r2(B().lines.reduce((s, l) => s + wkTarget(l), 0));
 const srcById = id => B().sources.find(s => s.id === id);
 const inWeek = (e, ws) => weekStart(e.date) === ws;
 const sum = (list, f) => r2(list.reduce((s, x) => s + f(x), 0));
@@ -184,7 +192,7 @@ function allocate(amt, src, ws){
   const funded = fundedFor(ws);
   const parts = {};
   for(const l of orderedLines()){
-    const need = r2((Number(l.target) || 0) - (funded[l.id] || 0));
+    const need = r2(wkTarget(l) - (funded[l.id] || 0));
     if(need <= 0 || left <= 0) continue;
     const give = r2(Math.min(need, left));
     parts[l.id] = give;
@@ -250,7 +258,7 @@ const expectedFor = (s, payDate) => B().expected.find(e => e.src === s.id && Mat
 const payableOn = (s, payDate) => unpaidWork(s.id).filter(w => w.date <= addDays(payDate, -holdOf(s)));
 function paydayPrompts(){
   const today = todayStr();
-  return B().sources.map(s => {
+  return B().sources.filter(s => s.mode !== 'other').map(s => {
     const d = lastPayday(s.payDay, today);
     if(daysBetween(d, today) > 2) return null;       // payday + 2 days of grace
     const ex = expectedFor(s, d), amt = ex ? ex.amt : workPay(payableOn(s, d));
@@ -263,7 +271,7 @@ function nextPaydayText(s){
 }
 function workOptions(){
   const out = [];
-  B().sources.forEach(s => {
+  B().sources.filter(s => s.mode !== 'other').forEach(s => {
     if(s.mode === 'hours') out.push({ src: s, type: 'shift', label: `${s.name} hours` });
     else { out.push({ src: s, type: 'full', label: `${s.name} · full day` }); out.push({ src: s, type: 'half', label: `${s.name} · half day` }); }
   });
@@ -272,7 +280,7 @@ function workOptions(){
 
 // ---------- rendering ----------
 function renderPayStrip(){
-  return `<div class="bd-paystrip">${B().sources.map(s => {
+  return `<div class="bd-paystrip">${B().sources.filter(s => s.mode !== 'other').map(s => {
     const due = paydayPrompts().some(p => p.src.id === s.id);
     return `<span class="bd-pchip ${due ? 'due' : ''}">${escapeHtml(s.name)} pays <b>${DAY_NAMES[s.payDay]}s</b> · ${due ? 'payday!' : nextPaydayText(s)}</span>`;
   }).join('')}</div>`;
@@ -297,7 +305,7 @@ function renderHero(ws){
   const worked = workPay(b.work.filter(w => inWeek(w, ws)));
   const funded = fundedFor(ws);
   const covered = Math.min(planTotal(), sum(Object.values(funded).map(v => ({ v })), x => x.v));
-  const short = orderedLines().filter(l => (funded[l.id] || 0) < (Number(l.target) || 0) - 0.004 && (Number(l.target) || 0) > 0);
+  const short = orderedLines().filter(l => (funded[l.id] || 0) < wkTarget(l) - 0.004 && wkTarget(l) > 0);
   const goal = b.weeklyGoal || 0;
   const pct = (v, t) => t > 0 ? Math.max(0, Math.min(100, v / t * 100)) : 0;
   return `<div class="bd-card bd-hero"><div class="bd-pin"></div>
@@ -321,7 +329,7 @@ function renderWork(ws){
   const isShift = cur.type === 'shift';
   const weekWork = B().work.filter(w => inWeek(w, ws));
   let summary = '';
-  B().sources.forEach(s => {
+  B().sources.filter(s => s.mode !== 'other').forEach(s => {
     const mine = weekWork.filter(w => w.src === s.id);
     if(s.mode === 'hours'){
       const h = sum(mine, w => w.hours || 0), pay = sum(mine, w => w.amt);
@@ -364,12 +372,12 @@ function renderPreview(){
   if(!pv) return '';
   const { plan, amt, src } = pv, funded = fundedFor(weekStart(pv.date || todayStr()));
   const rows = orderedLines().filter(l => plan.parts[l.id]).map(l => {
-    const after = r2((funded[l.id] || 0) + plan.parts[l.id]), t = Number(l.target) || 0;
+    const after = r2((funded[l.id] || 0) + plan.parts[l.id]), t = wkTarget(l);
     return `<div class="bd-pvrow"><span class="n">${escapeHtml(l.name)}<small>${after >= t - 0.004 ? 'fully funded for the week' : `${money(after)} of ${money(t)} — still needs ${money(r2(t - after))}`}</small></span><b>${money(plan.parts[l.id])}</b></div>`;
   }).join('');
   const afterF = Object.assign({}, funded); Object.entries(plan.parts).forEach(([id, a]) => { afterF[id] = r2((afterF[id] || 0) + a); });
-  const stillShort = orderedLines().filter(l => (Number(l.target) || 0) > 0 && (afterF[l.id] || 0) < Number(l.target) - 0.004);
-  const need = r2(stillShort.reduce((s, l) => s + (l.target - (afterF[l.id] || 0)), 0));
+  const stillShort = orderedLines().filter(l => wkTarget(l) > 0 && (afterF[l.id] || 0) < wkTarget(l) - 0.004);
+  const need = r2(stillShort.reduce((s, l) => s + (wkTarget(l) - (afterF[l.id] || 0)), 0));
   let msg;
   if(plan.extra > 0.004) msg = `<div class="bd-pvmsg ok">Everything this week is funded, with <b>${money(plan.extra)}</b> extra. Good places for it: your savings, or a cushion for a slow week.</div>`;
   else if(stillShort.length){
@@ -394,18 +402,33 @@ function renderLines(ws){
     if(!ls.length) return;
     h += `<div class="bd-grp">${g.label}</div>`;
     ls.forEach(l => {
-      const t = Number(l.target) || 0, f = funded[l.id] || 0, isSave = g.id === 'save';
+      const monthly = l.period === 'month';
+      const t = wkTarget(l), f = funded[l.id] || 0, isSave = g.id === 'save' || monthly;
       const used = isSave ? f : (spent[l.id] || 0), left = r2(t - used);
       const ok = f >= t - 0.004;
       const chip = ok ? `<span class="bd-chip ok">funded</span>` : `<span class="bd-chip short">needs ${money(r2(t - f))}</span>`;
       const over = !isSave && left < -0.004;
-      h += `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span>${t > 0 ? chip : ''}<span class="rt ${over ? 'bad' : ''}">${isSave ? `${money(f)} of ${money(t)} set aside` : (over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`)}</span></div>
+      h += `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span>${t > 0 ? chip : ''}<span class="rt ${over ? 'bad' : ''}">${isSave ? `${money(f)} of ${money(t)} set aside${monthly ? ' · monthly' : ''}` : (over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`)}</span></div>
         <div class="bd-bar ${over ? 'over' : ''}" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, used / t * 100) : 0}%"></i></div></div>`;
     });
   });
   const taxSaved = sum(B().income.filter(e => inWeek(e, ws)), e => e.tax || 0);
   if(taxSaved > 0) h += `<div class="bd-grp">tax set-aside</div><div class="bd-line"><div class="top"><span class="nm">Saved for taxes this week</span><span class="rt">${money(taxSaved)}</span></div></div>`;
   return `<div class="bd-card"><div class="bd-pin"></div><div class="bd-label">my week</div>${h}</div>`;
+}
+
+// Monthly lines: what you've spent so far this calendar month against the monthly amount.
+function renderMonth(ws){
+  const lines = orderedLines().filter(l => l.period === 'month' && l.group !== 'save');
+  if(!lines.length) return '';
+  const ref = (BD().wkOff || 0) === 0 ? todayStr() : addDays(ws, 6), ym = ref.slice(0, 7);
+  const name = parseDay(ref).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const rows = lines.map(l => {
+    const t = Number(l.target) || 0, sp = sum(B().purchases.filter(p => p.line === l.id && p.date.slice(0, 7) === ym), p => p.amt), left = r2(t - sp), over = left < -0.004;
+    return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span><span class="rt ${over ? 'bad' : ''}">${over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`}</span></div>
+      <div class="bd-bar ${over ? 'over' : ''}" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, sp / t * 100) : 0}%"></i></div></div>`;
+  }).join('');
+  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">this month <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">${name}</small></div>${rows}<div class="bd-hint" style="margin-top:6px;">monthly bills are set aside a little each week, and counted here when you spend them</div></div>`;
 }
 
 function goalStats(g){
@@ -420,7 +443,7 @@ function renderGoals(){
   const goals = B().goals;
   if(!goals.length) return '';
   return goals.map(g => {
-    const st = goalStats(g), weekly = st.line ? Number(st.line.target) || 0 : 0;
+    const st = goalStats(g), weekly = st.line ? wkTarget(st.line) : 0;
     let status;
     if(st.left <= 0.004) status = '<span class="bd-chip ok">done 🎉</span>';
     else if(g.due && daysBetween(todayStr(), g.due) < 0) status = '<span class="bd-chip over">past due</span>';
@@ -488,7 +511,7 @@ function renderPast(){
       det = `<div class="bd-wkdet"><div><span>paid</span><span>${money(s.gross)}</span></div>
         ${s.tax > 0 ? `<div><span>set aside for taxes</span><span>−${money(s.tax)}</span></div>` : ''}
         ${s.saved > 0 ? `<div><span>set aside as savings</span><span>−${money(s.saved)}</span></div>` : ''}
-        ${B().lines.filter(l => l.group !== 'save' && (spentBy[l.id] || 0) > 0).map(l => { const sp = spentBy[l.id], t = Number(l.target) || 0; return `<div class="${sp > t + 0.004 ? 'over' : ''}"><span>${escapeHtml(l.name)}</span><span>${money(sp)} of ${money(t)}</span></div>`; }).join('')}
+        ${B().lines.filter(l => l.group !== 'save' && (spentBy[l.id] || 0) > 0).map(l => { const sp = spentBy[l.id], t = wkTarget(l), mo = l.period === 'month'; return `<div class="${!mo && sp > t + 0.004 ? 'over' : ''}"><span>${escapeHtml(l.name)}</span><span>${mo ? money(sp) : `${money(sp)} of ${money(t)}`}</span></div>`; }).join('')}
         ${Object.keys(spentBy).filter(id => !lineById(id)).length ? `<div><span>removed lines</span><span>${money(sum(Object.keys(spentBy).filter(id => !lineById(id)), id => spentBy[id]))}</span></div>` : ''}
       </div>`;
     }
@@ -541,7 +564,9 @@ function renderPlanModal(){
   const p = ui.bdPlan;
   if(!p) return '';
   const dayOpts = sel => DAY_NAMES.map((n, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${n}</option>`).join('');
-  const srcBlocks = p.sources.map((s, i) => `<div class="bd-plan-src">
+  const srcBlocks = p.sources.map((s, i) => s.mode === 'other' ? `<div class="bd-plan-src"><div class="bd-hint">other income (gifts, winnings, refunds)</div>
+    <input type="text" data-bdp="src|${i}|name" placeholder="name" maxlength="24" value="${attr(s.name)}" />
+    <div class="bd-plan-row"><label>set aside for taxes %</label><input type="number" inputmode="decimal" data-bdp="src|${i}|taxPct" value="${attr(s.taxPct)}" /></div></div>` : `<div class="bd-plan-src">
     <div class="bd-hint">income source ${i + 1} · ${s.mode === 'hours' ? 'paid by the hour' : 'paid by the day'}</div>
     <input type="text" data-bdp="src|${i}|name" placeholder="name" maxlength="24" value="${attr(s.name)}" />
     <div class="bd-plan-row"><label>pays on</label><select data-bdp="src|${i}|payDay">${dayOpts(s.payDay)}</select></div>
@@ -554,7 +579,8 @@ function renderPlanModal(){
   </div>`).join('');
   const lineRows = p.lines.map((l, i) => `<div class="bd-plan-line">
     <input type="text" data-bdp="line|${i}|name" placeholder="name" maxlength="30" value="${attr(l.name)}" />
-    <input type="number" inputmode="decimal" class="w" data-bdp="line|${i}|target" placeholder="$/wk" value="${attr(l.target)}" />
+    <input type="number" inputmode="decimal" class="w" data-bdp="line|${i}|target" placeholder="$" value="${attr(l.target)}" />
+    <select class="per" data-bdp="line|${i}|period"><option value="week" ${l.period !== 'month' ? 'selected' : ''}>/wk</option><option value="month" ${l.period === 'month' ? 'selected' : ''}>/mo</option></select>
     <select data-bdp="line|${i}|group">${GROUPS.map(g => `<option value="${g.id}" ${g.id === l.group ? 'selected' : ''}>${g.label}</option>`).join('')}</select>
     <span class="bd-x" data-bdplandel="${i}" title="remove">✕</span></div>`).join('');
   return `<div class="modal-overlay" id="bdPlanOverlay"><div class="modal-box modal-box-lg">
@@ -589,7 +615,7 @@ function renderPlanModal(){
     <span class="bd-link" id="bdPlanAdd">+ add a line</span>
     <div class="bd-plan-h">or paste several at once</div>
     <textarea id="bdQuick" rows="5" placeholder="one per line, like:&#10;Groceries 35&#10;Rent 200 must&#10;Trip fund 50 save">${escapeHtml(p.quick || '')}</textarea>
-    <div class="bd-hint">add <b>must</b>, <b>save</b>, <b>spend</b> or <b>flex</b> at the end to pick a group (default: spend)</div>
+    <div class="bd-hint">add <b>must</b>, <b>save</b>, <b>spend</b> or <b>flex</b> to pick a group (default: spend), then <b>monthly</b> if the amount is per month</div>
     <span class="bd-link" id="bdQuickAdd">add these lines</span>
     <div class="modal-actions" style="margin-top:16px;"><button class="modal-cancel" id="bdPlanCancel">cancel</button><button class="modal-add" id="bdPlanSave">save plan</button></div>
   </div></div>`;
@@ -607,7 +633,7 @@ export function renderBudget(){
     ${renderBanner()}
     ${renderHero(ws)}
     <div class="bd-grid">${renderWork(ws)}${renderIncomeCard()}${renderPreview()}</div>
-    <div class="bd-grid"><div>${renderLines(ws)}${renderGoals()}${renderSafety()}</div><div>${renderPurchase()}${renderRecent()}${renderWishlist()}${renderPast()}</div></div>
+    <div class="bd-grid"><div>${renderLines(ws)}${renderMonth(ws)}${renderGoals()}${renderSafety()}</div><div>${renderPurchase()}${renderRecent()}${renderWishlist()}${renderPast()}</div></div>
     <div class="bd-foot"><span class="bd-link" id="bdEditPlan">edit my plan</span></div>
     ${renderPlanModal()}`;
 }
@@ -621,8 +647,8 @@ function openPlan(){
 function parseQuick(text){
   const out = [];
   text.split('\n').forEach(raw => {
-    const m = raw.trim().match(/^(.*?)[\s:]+\$?(\d+(?:\.\d+)?)(?:\s+(must|save|spend|flex))?\s*$/i);
-    if(m && m[1].trim()) out.push({ id: uid(), name: m[1].trim(), target: parseFloat(m[2]), group: (m[3] || 'spend').toLowerCase() });
+    const m = raw.trim().match(/^(.*?)[\s:]+\$?(\d+(?:\.\d+)?)(?:\s+(must|save|spend|flex))?(?:\s+(monthly|weekly))?\s*$/i);
+    if(m && m[1].trim()) out.push({ id: uid(), name: m[1].trim(), target: parseFloat(m[2]), group: (m[3] || 'spend').toLowerCase(), period: /^monthly$/i.test(m[4] || '') ? 'month' : 'week' });
   });
   return out;
 }
@@ -703,10 +729,10 @@ export function attachBudgetEvents(){
     if(!pv) return;
     const today = pv.date || todayStr();
     const sc = srcById(pv.src.id);
-    const paid = payableOn(sc, payDateFor(sc, today));
+    const paid = sc.mode === 'other' ? [] : payableOn(sc, payDateFor(sc, today));
     paid.forEach(w => { w.paid = true; });
     B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
-    B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
+    if(sc.mode !== 'other') B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
     d.preview = null; d.iAmt = ''; d.iDate = '';
     render(); saveData();
   });
@@ -826,7 +852,7 @@ export function attachBudgetEvents(){
       const b = B();
       b.sources = p.sources.map(s => Object.assign({}, s, { name: (s.name || '').trim() || 'income' }));
       b.weeklyGoal = Number(p.weeklyGoal) || 0;
-      b.lines = p.lines.filter(l => (l.name || '').trim()).map(l => ({ id: l.id, name: l.name.trim(), target: num(l.target), group: l.group }));
+      b.lines = p.lines.filter(l => (l.name || '').trim()).map(l => ({ id: l.id, name: l.name.trim(), target: num(l.target), group: l.group, period: l.period === 'month' ? 'month' : 'week' }));
       const keepRec = {}; b.recurring.forEach(r => { keepRec[r.id] = r; });
       b.recurring = p.recurring.filter(r => (r.name || '').trim() && num(r.amt) > 0).map(r => {
         const o = keepRec[r.id], day = Math.min(31, Math.max(1, Math.round(num(r.day)) || 1)), t = todayStr(), td = parseDay(t);

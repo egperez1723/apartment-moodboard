@@ -161,3 +161,44 @@ function importBudgetUpdateFromHash(){
   }, 2200);
 }
 importBudgetUpdateFromHash();
+
+// Add-tasks link: .../#todo-add=<base64 json {space, tasks:[{text, dueDate}]}>. Appends to the
+// named space's "stuff to do" list (creating the space if needed) and skips tasks already there.
+function importTodosFromHash(){
+  const m = location.hash.match(/^#todo-add=(.+)$/);
+  if(!m) return;
+  const token = m[1];
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  let done = '';
+  try{ done = localStorage.getItem('todoAddDone') || ''; }catch(e){}
+  if(done === token) return;
+  let data;
+  try{ data = JSON.parse(decodeURIComponent(escape(atob(token.replace(/-/g,'+').replace(/_/g,'/'))))); }catch(e){ return; }
+  if(!data || !Array.isArray(data.tasks)) return;
+  const name = data.space || 'School';
+  const mk = (t, i) => ({ id: 'todo' + Date.now().toString(36) + i, text: String(t.text).slice(0, 80), done: false, dueDate: t.dueDate || '' });
+  const merge = list => {
+    const have = new Set(list.map(x => x.text));
+    data.tasks.map(mk).forEach(t => { if(!have.has(t.text)) list.push(t); });
+    return list;
+  };
+  setTimeout(async () => {
+    for(let i = 0; i < 20 && !store.spaces.length; i++) await new Promise(r => setTimeout(r, 300));
+    const existing = store.spaces.find(s => s.name === name && (s.features || []).includes('todo') && !s.archived);
+    if(!confirm(`Add ${data.tasks.length} task(s) to "${name}"?`)) return;
+    try{ localStorage.setItem('todoAddDone', token); }catch(e){}
+    try{
+      if(existing){
+        await updateSpaceState(existing.id, st => { st.todoList = merge(st.todoList || []); });
+        openSpace(existing.id);
+      } else {
+        createSpace(name, ['todo'], '🎓', 'sage', { todoList: merge([]) });
+      }
+    }catch(e){
+      console.error('todo add failed', e);
+      try{ localStorage.removeItem('todoAddDone'); }catch(_){}
+      alert('Could not add tasks (' + (e.message || 'unknown error') + '). Open the link again.');
+    }
+  }, 2200);
+}
+importTodosFromHash();

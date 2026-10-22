@@ -192,7 +192,7 @@ function importTodosFromHash(){
         await updateSpaceState(existing.id, st => { st.todoList = merge(st.todoList || []); });
         openSpace(existing.id);
       } else {
-        createSpace(name, ['todo'], '🎓', 'sage', { todoList: merge([]) });
+        createSpace(name, ['todo'], '🔔', 'sage', { todoList: merge([]) });
       }
     }catch(e){
       console.error('todo add failed', e);

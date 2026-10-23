@@ -60,6 +60,7 @@ function reflowWeek(b, ws){
   const inc = b.income.filter(e => weekStart(e.date) === ws).sort((x, y) => (x.ts || 0) - (y.ts || 0) || x.date.localeCompare(y.date));
   const funded = {};
   inc.forEach(e => {
+    if(e.hold){ e.parts = {}; e.extra = 0; e.tax = 0; return; }
     let left = r2((Number(e.amt) || 0) - (Number(e.tax) || 0));
     const parts = {};
     order.forEach(l => {
@@ -186,7 +187,8 @@ function fundedFor(ws){
   return f;
 }
 // Pure: how a deposit would be split given what this week has already funded.
-function allocate(amt, src, ws){
+function allocate(amt, src, ws, hold){
+  if(hold) return { tax: 0, parts: {}, extra: 0, hold: true };
   const tax = r2(amt * (Number(src.taxPct) || 0) / 100);
   let left = r2(amt - tax);
   const funded = fundedFor(ws);
@@ -202,12 +204,13 @@ function allocate(amt, src, ws){
 }
 // leftover = deposits after taxes, minus what went to savings lines, minus what was spent
 function weekSummary(ws){
-  const inc = B().income.filter(e => inWeek(e, ws));
+  const inc = B().income.filter(e => inWeek(e, ws) && !e.hold);
+  const held = sum(B().income.filter(e => inWeek(e, ws) && e.hold), e => e.amt);
   const gross = sum(inc, e => e.amt), tax = sum(inc, e => e.tax || 0);
   const saved = sum(inc, e => Object.entries(e.parts || {}).reduce((s, [id, a]) => { const l = lineById(id); return s + (l && l.group === 'save' ? a : 0); }, 0));
   const buys = B().purchases.filter(p => inWeek(p, ws));
   const spent = sum(buys, p => p.amt);
-  return { gross, tax, saved, spent, leftover: r2(gross - tax - saved - spent), buys };
+  return { gross, held, tax, saved, spent, leftover: r2(gross - tax - saved - spent), buys };
 }
 function pastWeekStarts(){
   const cur = weekStart(todayStr());
@@ -361,7 +364,9 @@ function renderIncomeCard(){
     <div class="bd-label">I got paid</div>
     <div class="bd-seg">${srcs.map(x => `<span class="${x.id === d.iSrc ? 'on' : ''}" data-bdisrc="${x.id}">${escapeHtml(x.name)}</span>`).join('')}</div>
     <div class="bd-f"><input id="bdIAmt" class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ amount" data-bdin="iAmt" value="${attr(d.iAmt)}" />
-      ${s.taxPct > 0 ? `<span class="bd-hint">${s.taxPct}% will be set aside for taxes</span>` : ''}</div>
+      ${s.taxPct > 0 && !d.iHold ? `<span class="bd-hint">${s.taxPct}% will be set aside for taxes</span>` : ''}</div>
+    <div class="bd-f"><span class="bd-chip ${d.iHold ? 'ok' : 'flat'}" data-bdihold="1" style="cursor:pointer;">${d.iHold ? '✓ ' : ''}emergency — keep all in checking</span>
+      ${d.iHold ? `<div class="bd-hint">This won't be set aside for taxes, bills or savings. It just stays in checking${B().cushion > 0 ? ` toward your ${money(B().cushion)} cushion` : ''}.</div>` : ''}</div>
     <div class="bd-f"><label>paid on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="iDate" value="${attr(d.iDate || defDate())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdIncGo">show me where it goes</button><span class="bd-err">${escapeHtml(d.err.inc || '')}</span></div>
     <div class="bd-hint">I split it by priority: taxes, then must-pays, savings, everyday, flexible.</div></div>`;
@@ -379,6 +384,11 @@ function renderPreview(){
   const stillShort = orderedLines().filter(l => wkTarget(l) > 0 && (afterF[l.id] || 0) < wkTarget(l) - 0.004);
   const need = r2(stillShort.reduce((s, l) => s + (wkTarget(l) - (afterF[l.id] || 0)), 0));
   let msg;
+  if(pv.hold) return `<div class="bd-card bd-preview bd-full" id="bdPreview"><div class="bd-pin"></div>
+    <div class="bd-label">${money(amt)} from ${escapeHtml(src.name)} stays in checking</div>
+    <div class="bd-pvmsg ok">Emergency money: nothing is set aside for taxes, bills or savings. It all stays in checking as cushion.</div>
+    ${B().cushion > 0 ? `<div class="bd-hint" style="margin-top:6px;">Keep at least <b>${money(B().cushion)}</b> in checking.</div>` : ''}
+    <div class="bd-f" style="margin-top:12px;"><button class="bd-btn" id="bdPvSave">save this</button><button class="bd-btn ghost" id="bdPvCancel">cancel</button></div></div>`;
   if(plan.extra > 0.004) msg = `<div class="bd-pvmsg ok">Everything this week is funded, with <b>${money(plan.extra)}</b> extra. Good places for it: your savings, or a cushion for a slow week.</div>`;
   else if(stillShort.length){
     const flex = stillShort.filter(l => l.group === 'flex' || l.group === 'spend').map(l => l.name).reverse().slice(0, 2);
@@ -481,7 +491,7 @@ function renderPurchase(){
 
 function renderRecent(){
   const b = B(), items = [];
-  b.income.forEach(e => items.push({ k: 'in', kind: 'income', id: e.id, date: e.date, ts: e.ts || 0, t: `Paid · ${escapeHtml((srcById(e.src) || { name: 'income' }).name)}`, s: e.tax > 0 ? `${money(e.tax)} set aside for taxes` : '', a: e.amt }));
+  b.income.forEach(e => items.push({ k: 'in', kind: 'income', id: e.id, date: e.date, ts: e.ts || 0, t: `Paid · ${escapeHtml((srcById(e.src) || { name: 'income' }).name)}`, s: e.hold ? 'kept in checking' : (e.tax > 0 ? `${money(e.tax)} set aside for taxes` : ''), a: e.amt }));
   b.purchases.forEach(p => items.push({ k: 'out', kind: 'purchase', id: p.id, date: p.date, ts: p.ts || 0, t: escapeHtml((lineById(p.line) || { name: 'removed line' }).name), s: escapeHtml(p.note || ''), a: p.amt }));
   b.work.forEach(w => { const s = srcById(w.src) || { name: 'work' }; items.push({ k: 'work', kind: 'work', id: w.id, date: w.date, ts: w.ts || 0, t: w.type === 'shift' ? `${escapeHtml(s.name)} · ${w.hours} h` : `${escapeHtml(s.name)} · ${w.type} day`, s: '', a: w.amt }); });
   b.moves.filter(m => m.dest !== 'skipped').forEach(m => items.push({ k: 'save', kind: 'move', id: m.id, date: m.date, ts: 0, t: `Moved leftover to ${escapeHtml(m.dest)}`, s: weekLabel(m.week), a: m.amt }));
@@ -515,7 +525,7 @@ function renderPast(){
         ${Object.keys(spentBy).filter(id => !lineById(id)).length ? `<div><span>removed lines</span><span>${money(sum(Object.keys(spentBy).filter(id => !lineById(id)), id => spentBy[id]))}</span></div>` : ''}
       </div>`;
     }
-    return `<div class="bd-wkrow"><div class="hd" data-bdwk="${ws}"><span class="nm">${weekLabel(ws)}<small>paid ${money(s.gross)} · spent ${money(s.spent)}</small></span>${chip}<span class="caret">${open ? '▴' : '▾'}</span></div>${det}</div>`;
+    return `<div class="bd-wkrow"><div class="hd" data-bdwk="${ws}"><span class="nm">${weekLabel(ws)}<small>paid ${money(s.gross)}${s.held > 0 ? ` (+${money(s.held)} kept in checking)` : ''} · spent ${money(s.spent)}</small></span>${chip}<span class="caret">${open ? '▴' : '▾'}</span></div>${det}</div>`;
   }).join('');
   return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">past weeks</div>
     <div class="bd-hint" style="margin-bottom:6px;">${tally.length ? 'leftover moved to savings so far: ' + tally.join(' · ') : 'no leftover moved to savings yet'}</div>
@@ -673,6 +683,7 @@ export function attachBudgetEvents(){
   on('bdSetup', openPlan); on('bdEditPlan', openPlan);
 
   document.querySelectorAll('[data-bdwopt]').forEach(el => el.onclick = () => { d.wOpt = Number(el.getAttribute('data-bdwopt')); d.err.work = ''; render(); });
+  document.querySelectorAll('[data-bdihold]').forEach(el => el.onclick = () => { d.iHold = !d.iHold; d.preview = null; render(); });
   document.querySelectorAll('[data-bdisrc]').forEach(el => el.onclick = () => { d.iSrc = el.getAttribute('data-bdisrc'); d.preview = null; render(); });
 
   // log work
@@ -719,7 +730,7 @@ export function attachBudgetEvents(){
     const src = srcById(d.iSrc), amt = num(d.iAmt);
     if(!(amt > 0)){ d.err.inc = 'enter the amount you were paid'; render(); return; }
     d.err.inc = '';
-    d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, date: pickDate(d.iDate), plan: allocate(amt, src, weekStart(pickDate(d.iDate))) };
+    d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, date: pickDate(d.iDate), hold: !!d.iHold, plan: allocate(amt, src, weekStart(pickDate(d.iDate)), d.iHold) };
     d.scroll = 'preview';
     render();
   });
@@ -731,9 +742,9 @@ export function attachBudgetEvents(){
     const sc = srcById(pv.src.id);
     const paid = sc.mode === 'other' ? [] : payableOn(sc, payDateFor(sc, today));
     paid.forEach(w => { w.paid = true; });
-    B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
+    B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, hold: !!pv.hold, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
     if(sc.mode !== 'other') B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
-    d.preview = null; d.iAmt = ''; d.iDate = '';
+    d.preview = null; d.iAmt = ''; d.iDate = ''; d.iHold = false;
     render(); saveData();
   });
 

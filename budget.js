@@ -121,7 +121,7 @@ export function buildBudget(existing, patch){
   const lineId = name => { const l = b.lines.find(x => key(x.name) === key(name)); return l ? l.id : ''; };
   if(patch.goals) b.goals = patch.goals.map(g => { const o = b.goals.find(x => key(x.name) === key(g.name)); return { id: o ? o.id : uid(), name: g.name, total: Number(g.total) || 0, due: g.due || '', paid: Number(g.paid) || 0, lineId: lineId(g.line) }; });
   if(patch.buckets) b.buckets = patch.buckets.map(k => { const o = b.buckets.find(x => key(x.name) === key(k.name)); return Object.assign({}, o || {}, { id: o ? o.id : uid(), name: k.name, balance: Number(k.balance) || 0, locked: !!k.locked, match: k.match || '', tax: !!k.tax, asOf: k.asOf || '', note: k.note || '' }); });
-  if(patch.accounts) b.accounts = patch.accounts.map(a => { const o = b.accounts.find(x => x.kind === a.kind); return Object.assign({}, o || {}, { id: o ? o.id : uid(), kind: a.kind, name: a.name, what: a.what || '', match: a.match || [], min: Number(a.min) || 0 }); });
+  if(patch.accounts) b.accounts = patch.accounts.map(a => { const o = b.accounts.find(x => x.kind === a.kind); return Object.assign({}, o || {}, { id: o ? o.id : uid(), kind: a.kind, name: a.name, what: a.what || '', match: a.match || [], min: Number(a.min) || 0, until: a.until || '' }); });
   if(patch.loads) Object.assign(b.loads, patch.loads);
   if(patch.borrows) patch.borrows.forEach(p => { const bid = (b.buckets.find(k => key(k.name) === key(p.bucket)) || {}).id || p.bucket; if(!b.borrows.some(x => x.date === p.date && x.bucket === bid && Number(x.amt) === Number(p.amt))) b.borrows.push({ id: uid(), bucket: bid, amt: Number(p.amt) || 0, date: p.date || todayStr(), repaid: false, repaidOn: '' }); });
   if(patch.recurring) b.recurring = patch.recurring.map(r => { const o = b.recurring.find(x => key(x.name) === key(r.name)); return { id: o ? o.id : uid(), name: r.name, amt: Number(r.amt) || 0, day: Number(r.day) || 1, lineId: lineId(r.line), since: r.since || (o ? o.since : todayStr()), posted: o ? o.posted || [] : [] }; });
@@ -509,7 +509,7 @@ function renderAccounts(ws){
   const b = B();
   if(!b.accounts.length) return '';
   const lagSrc = b.sources.filter(x => Number(x.holdDays) > 0);
-  const rows = b.accounts.map(a => {
+  const rows = b.accounts.filter(a => !a.until || todayStr() <= a.until).map(a => {
     const ls = acctLines(a), names = ls.map(l => escapeHtml(l.name)).join(', ');
     if(a.kind === 'fun'){
       const load = b.loads[ws] !== undefined ? Number(b.loads[ws]) : sum(ls, l => wkTarget(l)), spent = spentOn(ls, ws), left = r2(load - spent);
@@ -530,7 +530,7 @@ function renderAccounts(ws){
       return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt">${money(tot)} in buckets</span></div><div class="bd-hint">${escapeHtml(a.what || 'savings buckets (below)')}</div></div>`;
     }
     const spent = spentOn(ls, ws), lim = sum(ls, l => wkTarget(l));
-    return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt">${lim > 0 ? `${money(r2(lim - spent))} left of ${money(lim)}` : ''}</span></div><div class="bd-hint">${escapeHtml(a.what || names)}</div></div>`;
+    return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt">${ls.length && lim > 0 ? `${money(r2(lim - spent))} left of ${money(lim)}` : ''}</span></div><div class="bd-hint">${escapeHtml(a.what || names)}</div></div>`;
   }).join('');
   const lag = lagSrc.length ? `<div class="bd-hint" style="margin-top:8px;">${lagSrc.map(x => escapeHtml(x.name)).join(' & ')} pay arrives about ${Math.max(...lagSrc.map(x => Number(x.holdDays)))} days after you work it. Plan by days worked; the checking cushion covers the gap.</div>` : '';
   return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">accounts</div>${rows}${lag}</div>`;

@@ -118,6 +118,9 @@ export function buildBudget(existing, patch){
     const old = b.lines;
     b.lines = patch.lines.map(l => { const o = old.find(x => key(x.name) === key(l.name)); return { id: o ? o.id : uid(), name: l.name, target: Number(l.target) || 0, group: l.group || 'spend', period: l.period === 'month' ? 'month' : 'week' }; });
   }
+  // small edits to existing lines by name, without resending the whole list: {name, target?, period?, group?}
+  (patch.lineEdits || []).forEach(e => { const l = b.lines.find(x => key(x.name) === key(e.name)) || b.lines.find(x => key(x.name).includes(key(e.name))); if(!l) return; if(e.target !== undefined) l.target = Number(e.target) || 0; if(e.period) l.period = e.period === 'month' ? 'month' : 'week'; if(e.group) l.group = e.group; });
+  if(patch.lineEdits && patch.lineEdits.length && !patch.lines) healIncome(b), reflowWeek(b, weekStart(todayStr()));
   const lineId = name => { const l = b.lines.find(x => key(x.name) === key(name)); return l ? l.id : ''; };
   if(patch.goals) b.goals = patch.goals.map(g => { const o = b.goals.find(x => key(x.name) === key(g.name)); return { id: o ? o.id : uid(), name: g.name, total: Number(g.total) || 0, due: g.due || '', paid: Number(g.paid) || 0, lineId: lineId(g.line) }; });
   if(patch.buckets) b.buckets = patch.buckets.map(k => { const o = b.buckets.find(x => key(x.name) === key(k.name)); return Object.assign({}, o || {}, { id: o ? o.id : uid(), name: k.name, balance: Number(k.balance) || 0, locked: !!k.locked, match: k.match || '', tax: !!k.tax, asOf: k.asOf || '', note: k.note || '' }); });

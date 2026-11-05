@@ -56,6 +56,15 @@ function defaultBudget(){
 }
 // A line's budget is weekly unless marked monthly; monthly lines are set aside weekly at amount x 12 / 52.
 const wkTarget = l => l.period === 'month' ? Math.round((Number(l.target) || 0) * 12 / 52 * 100) / 100 : (Number(l.target) || 0);
+// Per-week adjustments: b.adj[weekStart] = { covered:[lineId] (already paid for, don't fund), skip:{lineId: carried $} (skip this week, add the amount to next week) }
+const adjOf = (b, ws) => (b.adj && b.adj[ws]) || {};
+function weekTarget(l, ws, b){
+  b = b || B();
+  const a = adjOf(b, ws);
+  if((a.covered || []).includes(l.id) || (a.skip && a.skip[l.id] !== undefined)) return 0;
+  const prev = adjOf(b, addDays(ws, -7));
+  return Math.round((wkTarget(l) + ((prev.skip || {})[l.id] || 0)) * 100) / 100;
+}
 // Re-split a week's deposits across the current lines (priority order), keeping each deposit's tax.
 // Needed when the plan changes after money was already split under the old lines.
 function reflowWeek(b, ws){
@@ -64,10 +73,11 @@ function reflowWeek(b, ws){
   const funded = {};
   inc.forEach(e => {
     if(e.hold){ e.parts = {}; e.extra = 0; return; }
-    let left = r2((Number(e.amt) || 0) - (Number(e.tax) || 0));
+    if(e.custom){ Object.entries(e.parts || {}).forEach(([id, a]) => { funded[id] = r2((funded[id] || 0) + a); }); return; }
+    let left = r2((Number(e.amt) || 0) - (Number(e.tax) || 0) - (Number(e.payback) || 0) - (Number(e.toChecking) || 0));
     const parts = {};
     order.forEach(l => {
-      const need = r2(wkTarget(l) - (funded[l.id] || 0));
+      const need = r2(weekTarget(l, ws, b) - (funded[l.id] || 0));
       if(need <= 0 || left <= 0) return;
       const give = r2(Math.min(need, left));
       parts[l.id] = give; funded[l.id] = r2((funded[l.id] || 0) + give); left = r2(left - give);
@@ -128,6 +138,23 @@ export function buildBudget(existing, patch){
   if(patch.loads) Object.assign(b.loads, patch.loads);
   if(patch.borrows) patch.borrows.forEach(p => { const bid = (b.buckets.find(k => key(k.name) === key(p.bucket)) || {}).id || p.bucket; if(!b.borrows.some(x => x.date === p.date && x.bucket === bid && Number(x.amt) === Number(p.amt))) b.borrows.push({ id: uid(), bucket: bid, amt: Number(p.amt) || 0, date: p.date || todayStr(), repaid: false, repaidOn: '' }); });
   if(patch.recurring) b.recurring = patch.recurring.map(r => { const o = b.recurring.find(x => key(x.name) === key(r.name)); return { id: o ? o.id : uid(), name: r.name, amt: Number(r.amt) || 0, day: Number(r.day) || 1, lineId: lineId(r.line), since: r.since || (o ? o.since : todayStr()), posted: o ? o.posted || [] : [] }; });
+  if(!b.adj || typeof b.adj !== 'object') b.adj = {};
+  (patch.adj || []).forEach(p => { const a = b.adj[p.week] = b.adj[p.week] || {}; a.covered = a.covered || []; a.skip = a.skip || {};
+    (p.covered || []).forEach(n => { const id = lineId(n); if(id && !a.covered.includes(id)) a.covered.push(id); });
+    Object.entries(p.skip || {}).forEach(([n, amt]) => { const id = lineId(n); if(id) a.skip[id] = Number(amt) || 0; }); });
+  (patch.deposits || []).forEach(p => {
+    const sc = b.sources.find(x => key(x.name) === key(p.src));
+    if(!sc) return;
+    const parts = {}; Object.entries(p.parts || {}).forEach(([n, a]) => { const id = lineId(n); if(id) parts[id] = Number(a) || 0; });
+    const entry = { id: uid(), src: sc.id, amt: Number(p.amt) || 0, tax: Number(p.tax) || 0, parts, extra: 0, custom: true, payback: Number(p.payback) || 0, toChecking: Number(p.toChecking) || 0, date: p.date, paidIds: [], ts: Date.now() };
+    const dup = b.income.findIndex(e => e.src === sc.id && Math.abs(e.amt - entry.amt) < 0.005 && e.date === p.date);
+    if(dup >= 0){ entry.id = b.income[dup].id; entry.paidIds = b.income[dup].paidIds || []; entry.ts = b.income[dup].ts || entry.ts; b.income[dup] = entry; } else b.income.push(entry);
+    // shifts this payday covers are now paid
+    if(sc.mode !== 'other'){ const hold = (sc.holdDays === undefined || sc.holdDays === null || sc.holdDays === '') ? 1 : Number(sc.holdDays);
+      const paid = b.work.filter(w => w.src === sc.id && !w.paid && w.date <= addDays(p.date, -hold)); paid.forEach(w => { w.paid = true; }); entry.paidIds = Array.from(new Set(entry.paidIds.concat(paid.map(w => w.id)))); }
+    if(entry.payback > 0){ let left = entry.payback; b.borrows.filter(x => !x.repaid).forEach(x => { if(left >= x.amt - 0.005){ x.repaid = true; x.repaidOn = p.date; left = r2(left - x.amt); } }); }
+    reflowWeek(b, weekStart(p.date));
+  });
   if(patch.cushion !== undefined) b.cushion = Number(patch.cushion) || 0;
   if(patch.lines) healIncome(b);
   if(patch.weeklyGoal !== undefined) b.weeklyGoal = Number(patch.weeklyGoal) || 0;
@@ -198,30 +225,32 @@ function fundedFor(ws){
   return f;
 }
 // Pure: how a deposit would be split given what this week has already funded.
-function allocate(amt, src, ws, hold){
+function allocate(amt, src, ws, hold, payback){
   const tax = r2(amt * (Number(src.taxPct) || 0) / 100);
   if(hold) return { tax, parts: {}, extra: 0, hold: true };
-  let left = r2(amt - tax);
+  payback = Math.min(Number(payback) || 0, r2(amt - tax));
+  let left = r2(amt - tax - payback);
   const funded = fundedFor(ws);
   const parts = {};
   for(const l of orderedLines()){
-    const need = r2(wkTarget(l) - (funded[l.id] || 0));
+    const need = r2(weekTarget(l, ws) - (funded[l.id] || 0));
     if(need <= 0 || left <= 0) continue;
     const give = r2(Math.min(need, left));
     parts[l.id] = give;
     left = r2(left - give);
   }
-  return { tax, parts, extra: left };
+  return { tax, parts, extra: left, payback };
 }
 // leftover = deposits after taxes, minus what went to savings lines, minus what was spent
 function weekSummary(ws){
   const inc = B().income.filter(e => inWeek(e, ws) && !e.hold);
-  const held = sum(B().income.filter(e => inWeek(e, ws) && e.hold), e => r2(e.amt - (e.tax || 0)));
-  const gross = sum(inc, e => e.amt), tax = sum(inc, e => e.tax || 0);
+  const held = sum(B().income.filter(e => inWeek(e, ws)), e => (e.hold ? r2(e.amt - (e.tax || 0)) : 0) + (e.toChecking || 0));
+  const paidBack = sum(B().income.filter(e => inWeek(e, ws)), e => e.payback || 0);
+  const gross = sum(inc, e => r2(e.amt - (e.payback || 0) - (e.toChecking || 0))), tax = sum(inc, e => e.tax || 0);
   const saved = sum(inc, e => Object.entries(e.parts || {}).reduce((s, [id, a]) => { const l = lineById(id); return s + (l && l.group === 'save' ? a : 0); }, 0));
   const buys = B().purchases.filter(p => inWeek(p, ws));
   const spent = sum(buys, p => p.amt);
-  return { gross, held, tax, saved, spent, leftover: r2(gross - tax - saved - spent), buys };
+  return { gross, held, paidBack, tax, saved, spent, leftover: r2(gross - tax - saved - spent), buys };
 }
 function pastWeekStarts(){
   const cur = weekStart(todayStr());
@@ -319,7 +348,7 @@ function renderHero(ws){
   const worked = workPay(b.work.filter(w => inWeek(w, ws)));
   const funded = fundedFor(ws);
   const covered = Math.min(planTotal(), sum(Object.values(funded).map(v => ({ v })), x => x.v));
-  const short = orderedLines().filter(l => (funded[l.id] || 0) < wkTarget(l) - 0.004 && wkTarget(l) > 0);
+  const short = orderedLines().filter(l => (funded[l.id] || 0) < weekTarget(l, ws) - 0.004 && weekTarget(l, ws) > 0);
   const goal = b.weeklyGoal || 0;
   const pct = (v, t) => t > 0 ? Math.max(0, Math.min(100, v / t * 100)) : 0;
   return `<div class="bd-card bd-hero"><div class="bd-pin"></div>
@@ -386,14 +415,14 @@ function renderIncomeCard(){
 function renderPreview(){
   const pv = BD().preview;
   if(!pv) return '';
-  const { plan, amt, src } = pv, funded = fundedFor(weekStart(pv.date || todayStr()));
+  const { plan, amt, src } = pv, wsP = weekStart(pv.date || todayStr()), funded = fundedFor(wsP);
   const rows = orderedLines().filter(l => plan.parts[l.id]).map(l => {
-    const after = r2((funded[l.id] || 0) + plan.parts[l.id]), t = wkTarget(l);
+    const after = r2((funded[l.id] || 0) + plan.parts[l.id]), t = weekTarget(l, wsP);
     return `<div class="bd-pvrow"><span class="n">${escapeHtml(l.name)}<small>${after >= t - 0.004 ? 'fully funded for the week' : `${money(after)} of ${money(t)} — still needs ${money(r2(t - after))}`}</small></span><b>${money(plan.parts[l.id])}</b></div>`;
   }).join('');
   const afterF = Object.assign({}, funded); Object.entries(plan.parts).forEach(([id, a]) => { afterF[id] = r2((afterF[id] || 0) + a); });
-  const stillShort = orderedLines().filter(l => wkTarget(l) > 0 && (afterF[l.id] || 0) < wkTarget(l) - 0.004);
-  const need = r2(stillShort.reduce((s, l) => s + (wkTarget(l) - (afterF[l.id] || 0)), 0));
+  const stillShort = orderedLines().filter(l => weekTarget(l, wsP) > 0 && (afterF[l.id] || 0) < weekTarget(l, wsP) - 0.004);
+  const need = r2(stillShort.reduce((s, l) => s + (weekTarget(l, wsP) - (afterF[l.id] || 0)), 0));
   const owing = outstandingBorrows().filter(() => src && (srcById(src.id) || {}).mode === 'days');
   let msg;
   if(pv.hold) return `<div class="bd-card bd-preview bd-full" id="bdPreview"><div class="bd-pin"></div>
@@ -411,13 +440,13 @@ function renderPreview(){
   return `<div class="bd-card bd-preview bd-full" id="bdPreview"><div class="bd-pin"></div>
     <div class="bd-label">here's where ${money(amt)} from ${escapeHtml(src.name)} goes</div>
     ${plan.tax > 0 ? `<div class="bd-pvrow tax"><span class="n">Tax set-aside<small>${src.taxPct}% of ${escapeHtml(src.name)} pay — don't spend this</small></span><b>${money(plan.tax)}</b></div>` : ''}
-    ${owing.length ? `<div class="bd-pvmsg warn"><b>Pay back first:</b> move ${money(sum(owing, x => x.amt))} back to ${escapeHtml(((B().buckets.find(k => k.id === owing[0].bucket) || {}).name) || 'savings')} before anything else.</div>` : ''}
+    ${plan.payback > 0 ? `<div class="bd-pvrow tax"><span class="n">Pay back ${escapeHtml(((B().buckets.find(k => k.id === owing[0].bucket) || {}).name) || 'savings')}<small>comes off the top first, stays in savings — only the rest is split below</small></span><b>${money(plan.payback)}</b></div>` : ''}
     ${rows}${msg}
     <div class="bd-f" style="margin-top:12px;"><button class="bd-btn" id="bdPvSave">save this</button><button class="bd-btn ghost" id="bdPvCancel">cancel</button></div></div>`;
 }
 
 function renderLines(ws){
-  const funded = fundedFor(ws);
+  const funded = fundedFor(ws), off0 = true;
   const spent = {};
   B().purchases.filter(p => inWeek(p, ws)).forEach(p => { spent[p.line] = r2((spent[p.line] || 0) + p.amt); });
   let h = '';
@@ -427,13 +456,17 @@ function renderLines(ws){
     h += `<div class="bd-grp">${g.label}</div>`;
     ls.forEach(l => {
       const monthly = l.period === 'month';
-      const t = wkTarget(l), f = funded[l.id] || 0, isSave = g.id === 'save' || monthly;
+      const isSave = g.id === 'save' || monthly;
+      const adj = adjOf(B(), ws), isCov = (adj.covered || []).includes(l.id), isSkip = !!(adj.skip && adj.skip[l.id] !== undefined);
+      const tf = weekTarget(l, ws), carryIn = r2(tf - (isCov || isSkip ? 0 : wkTarget(l)));
+      const t = isSave ? tf : wkTarget(l), f = funded[l.id] || 0;
       const used = isSave ? f : (spent[l.id] || 0), left = r2(t - used);
-      const ok = f >= t - 0.004;
-      const chip = ok ? `<span class="bd-chip ok">funded</span>` : `<span class="bd-chip short">needs ${money(r2(t - f))}</span>`;
+      const ok = f >= tf - 0.004;
+      const chip = isCov ? `<span class="bd-chip ok">paid already</span>` : (isSkip ? `<span class="bd-chip flat">skipped · carries over</span>` : (ok ? `<span class="bd-chip ok">funded</span>` : `<span class="bd-chip short">needs ${money(r2(tf - f))}</span>`));
       const over = !isSave && left < -0.004;
-      h += `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span>${t > 0 ? chip : ''}<span class="rt ${over ? 'bad' : ''}">${isSave ? `${money(f)} of ${money(t)} set aside${monthly ? ' · monthly' : ''}` : (over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`)}</span></div>
-        <div class="bd-bar ${over ? 'over' : ''}" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, used / t * 100) : 0}%"></i></div></div>`;
+      h += `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span>${(t > 0 || isCov || isSkip) ? chip : ''}<span class="rt ${over ? 'bad' : ''}">${isSave ? (isSkip ? `skipped (${money(adj.skip[l.id])} carries to next week)` : `${money(f)} of ${money(t)} set aside${monthly ? ' · monthly' : ''}${carryIn > 0 ? ` (incl. ${money(carryIn)} carried over)` : ''}`) : (over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`)}</span></div>
+        <div class="bd-bar ${over ? 'over' : ''}" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, used / t * 100) : 0}%"></i></div>
+        ${off0 ? `<div style="margin-top:4px;"><span class="bd-link" data-bdcover="${l.id}|${ws}|${isSave ? 'skip' : 'cov'}">${isCov || isSkip ? 'undo' : (isSave ? 'skip this week (carry over)' : 'already paid this week')}</span></div>` : ''}</div>`;
     });
   });
   const taxSaved = sum(B().income.filter(e => inWeek(e, ws)), e => e.tax || 0);
@@ -499,6 +532,7 @@ function bucketBalance(k){
   return r2(bal);
 }
 function owedBack(k){ return sum(outstandingBorrows().filter(x => x.bucket === k.id), x => x.amt); }
+function owedNow(srcId){ const sc = srcById(srcId); return sc && sc.mode === 'days' ? sum(outstandingBorrows(), x => x.amt) : 0; }
 function renderPayback(){
   const out = outstandingBorrows();
   if(!out.length) return '';
@@ -596,7 +630,7 @@ function renderPast(){
         ${Object.keys(spentBy).filter(id => !lineById(id)).length ? `<div><span>removed lines</span><span>${money(sum(Object.keys(spentBy).filter(id => !lineById(id)), id => spentBy[id]))}</span></div>` : ''}
       </div>`;
     }
-    return `<div class="bd-wkrow"><div class="hd" data-bdwk="${ws}"><span class="nm">${weekLabel(ws)}<small>paid ${money(s.gross)}${s.held > 0 ? ` (+${money(s.held)} kept in checking)` : ''} · spent ${money(s.spent)}</small></span>${chip}<span class="caret">${open ? '▴' : '▾'}</span></div>${det}</div>`;
+    return `<div class="bd-wkrow"><div class="hd" data-bdwk="${ws}"><span class="nm">${weekLabel(ws)}<small>paid ${money(s.gross)}${s.held > 0 ? ` (+${money(s.held)} kept in checking)` : ''}${s.paidBack > 0 ? ` (+${money(s.paidBack)} paid back)` : ''} · spent ${money(s.spent)}</small></span>${chip}<span class="caret">${open ? '▴' : '▾'}</span></div>${det}</div>`;
   }).join('');
   return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">past weeks</div>
     <div class="bd-hint" style="margin-bottom:6px;">${tally.length ? 'leftover moved to savings so far: ' + tally.join(' · ') : 'no leftover moved to savings yet'}</div>
@@ -797,6 +831,17 @@ export function attachBudgetEvents(){
     render();
   });
 
+  document.querySelectorAll('[data-bdcover]').forEach(el => el.onclick = () => {
+    const [id, wk, mode] = el.getAttribute('data-bdcover').split('|'), b = B(), l = lineById(id);
+    if(!l) return;
+    if(!b.adj) b.adj = {};
+    const a = b.adj[wk] = b.adj[wk] || {}; a.covered = a.covered || []; a.skip = a.skip || {};
+    const on = a.covered.includes(id) || a.skip[id] !== undefined;
+    a.covered = a.covered.filter(x => x !== id); delete a.skip[id];
+    if(!on){ if(mode === 'skip') a.skip[id] = wkTarget(l); else a.covered.push(id); }
+    reflowWeek(b, wk);
+    render(); saveData();
+  });
   document.querySelectorAll('[data-bdload]').forEach(el => el.onchange = () => { B().loads[el.getAttribute('data-bdload')] = num(el.value); render(); saveData(); });
   document.querySelectorAll('[data-bdbal]').forEach(el => el.onchange = () => { const a = B().accounts.find(x => x.id === el.getAttribute('data-bdbal')); if(a){ a.balance = el.value === '' ? '' : num(el.value); render(); saveData(); } });
   document.querySelectorAll('[data-bdpayback]').forEach(el => el.onclick = () => { const x = B().borrows.find(y => y.id === el.getAttribute('data-bdpayback')); if(x){ x.repaid = true; x.repaidOn = todayStr(); render(); saveData(); } });
@@ -806,7 +851,7 @@ export function attachBudgetEvents(){
     const src = srcById(d.iSrc), amt = num(d.iAmt);
     if(!(amt > 0)){ d.err.inc = 'enter the amount you were paid'; render(); return; }
     d.err.inc = '';
-    d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, date: pickDate(d.iDate), hold: !!d.iHold, plan: allocate(amt, src, weekStart(pickDate(d.iDate)), d.iHold) };
+    d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, date: pickDate(d.iDate), hold: !!d.iHold, plan: allocate(amt, src, weekStart(pickDate(d.iDate)), d.iHold, owedNow(src.id)) };
     d.scroll = 'preview';
     render();
   });
@@ -818,8 +863,9 @@ export function attachBudgetEvents(){
     const sc = srcById(pv.src.id);
     const paid = sc.mode === 'other' ? [] : payableOn(sc, payDateFor(sc, today));
     paid.forEach(w => { w.paid = true; });
-    B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, hold: !!pv.hold, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
+    B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, hold: !!pv.hold, payback: pv.plan.payback || 0, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
     if(sc.mode !== 'other') B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
+    if(pv.plan.payback > 0){ let left = pv.plan.payback; outstandingBorrows().forEach(x => { if(left >= x.amt - 0.005){ x.repaid = true; x.repaidOn = today; left = r2(left - x.amt); } }); }
     d.preview = null; d.iAmt = ''; d.iDate = ''; d.iHold = false;
     render(); saveData();
   });

@@ -36,7 +36,7 @@ export const ALL_FEATURES = [
   { id: 'info', label: 'info card' },
   { id: 'course', label: 'course tracker (syllabus + assignments)' },
   { id: 'costumes', label: 'costume planner (costumes, pieces, countdown)' },
-  { id: 'budget', label: 'weekly budget (income, purchases, paydays)' }
+  { id: 'budget', label: 'money tracker (came in, went out, savings)' }
 ];
 
 // `store.data` holds the currently open space's board (categories, shopping
@@ -407,6 +407,15 @@ export async function setSpaceArchived(id, archived){
   render();
   try{ await spacesCol.doc(id).set({ archived }, { merge: true }); }
   catch(e){ console.error('archive toggle failed', e); }
+}
+
+export async function setSpaceName(id, name){
+  const clean = (name || '').trim();
+  if(!clean) return;
+  const sp = store.spaces.find(x => x.id === id);
+  if(sp) sp.name = clean;
+  try{ await spacesCol.doc(id).set({ name: clean }, { merge: true }); }
+  catch(e){ console.error('rename failed', e); }
 }
 
 export async function renameSpace(name){

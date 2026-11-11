@@ -1,4 +1,4 @@
-// Weekly budget spaces (feature id "budget").
+// Money tracker spaces (feature id "budget", kept so saved data still works). A calm tracker: what came in, what went out, what's left.
 //
 // How it works:
 //  - You log work as you finish it (hours + what you made, or a full/half day).
@@ -26,6 +26,7 @@
 //   cushion   minimum to keep in checking
 //   accounts  where each kind of money lives: {id, kind:'fun'|'checking'|'pets'|'savings', name, what, match:[words in line names], balance?, min?}
 //             'fun' shows what's left of this week's load (sum of its lines' weekly limits, or b.loads[weekStart])
+//   events    one-off things like a trip: {id, name, date, parts:[{label, amt}], ts} (counted in 'went out', not against any usual amount)
 //   borrows   money taken from a bucket to pay back first: {id, bucket, amt, date, repaid, repaidOn}
 //   recurring monthly charges that log themselves: {id, name, amt, day, lineId, since, posted:[dates]}
 //   expected  exact amounts you know are coming: {id, src, amt, date}
@@ -36,8 +37,8 @@ import { uid, escapeHtml, PENCIL_ICON, COLLAPSE_ICON } from './shared.js';
 import { render } from './app.js';
 
 export const GROUPS = [
-  { id: 'must', label: 'must-pay' },
-  { id: 'save', label: 'savings' },
+  { id: 'must', label: 'usual bills' },
+  { id: 'save', label: 'saving' },
   { id: 'spend', label: 'everyday' },
   { id: 'flex', label: 'flexible' }
 ];
@@ -97,7 +98,7 @@ function ensureOtherSource(b){
 function B(){
   if(!store.data.budget) store.data.budget = defaultBudget();
   const b = store.data.budget;
-  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring', 'accounts', 'borrows'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
+  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring', 'accounts', 'borrows', 'events'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!b.loads || typeof b.loads !== 'object') b.loads = {};
   if(!Array.isArray(b.sources) || b.sources.length === 0) b.sources = defaultBudget().sources;
   ensureOtherSource(b);
@@ -115,7 +116,7 @@ function BD(){
 // Lines and goals are matched by name so funded history stays attached.
 export function buildBudget(existing, patch){
   const b = existing ? JSON.parse(JSON.stringify(existing)) : defaultBudget();
-  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring', 'accounts', 'borrows'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
+  ['lines', 'income', 'purchases', 'work', 'moves', 'wishlist', 'goals', 'buckets', 'expected', 'recurring', 'accounts', 'borrows', 'events'].forEach(k => { if(!Array.isArray(b[k])) b[k] = []; });
   if(!b.loads || typeof b.loads !== 'object') b.loads = {};
   if(!Array.isArray(b.sources) || !b.sources.length) b.sources = defaultBudget().sources;
   ensureOtherSource(b);
@@ -136,6 +137,7 @@ export function buildBudget(existing, patch){
   if(patch.buckets) b.buckets = patch.buckets.map(k => { const o = b.buckets.find(x => key(x.name) === key(k.name)); return Object.assign({}, o || {}, { id: o ? o.id : uid(), name: k.name, balance: Number(k.balance) || 0, locked: !!k.locked, match: k.match || '', tax: !!k.tax, asOf: k.asOf || '', note: k.note || '' }); });
   if(patch.accounts) b.accounts = patch.accounts.map(a => { const o = b.accounts.find(x => x.kind === a.kind); return Object.assign({}, o || {}, { id: o ? o.id : uid(), kind: a.kind, name: a.name, what: a.what || '', match: a.match || [], min: Number(a.min) || 0, until: a.until || '' }); });
   if(patch.loads) Object.assign(b.loads, patch.loads);
+  (patch.events || []).forEach(p => { const parts = (p.parts || []).map(x => ({ label: String(x.label || ''), amt: Number(x.amt) || 0 })); if(!b.events.some(x => key(x.name) === key(p.name) && x.date === p.date)) b.events.push({ id: uid(), name: p.name, date: p.date, parts, ts: Date.now() }); });
   if(patch.borrows) patch.borrows.forEach(p => { const bid = (b.buckets.find(k => key(k.name) === key(p.bucket)) || {}).id || p.bucket; if(!b.borrows.some(x => x.date === p.date && x.bucket === bid && Number(x.amt) === Number(p.amt))) b.borrows.push({ id: uid(), bucket: bid, amt: Number(p.amt) || 0, date: p.date || todayStr(), repaid: false, repaidOn: '' }); });
   if(patch.recurring) b.recurring = patch.recurring.map(r => { const o = b.recurring.find(x => key(x.name) === key(r.name)); return { id: o ? o.id : uid(), name: r.name, amt: Number(r.amt) || 0, day: Number(r.day) || 1, lineId: lineId(r.line), since: r.since || (o ? o.since : todayStr()), posted: o ? o.posted || [] : [] }; });
   if(!b.adj || typeof b.adj !== 'object') b.adj = {};
@@ -163,7 +165,7 @@ export function buildBudget(existing, patch){
 
 // ---------- small helpers ----------
 const r2 = n => Math.round(n * 100) / 100;
-const money = n => '$' + (Math.abs(n - Math.round(n)) < 0.005 ? String(Math.round(n)) : r2(n).toFixed(2));
+const money = n => (n < -0.004 ? '−' : '') + '$' + (Math.abs(n - Math.round(n)) < 0.005 ? String(Math.abs(Math.round(n))) : Math.abs(r2(n)).toFixed(2));
 const attr = s => escapeHtml(s).replace(/"/g, '&quot;');
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 
@@ -227,8 +229,8 @@ function fundedFor(ws){
 // Pure: how a deposit would be split given what this week has already funded.
 function allocate(amt, src, ws, hold, payback){
   const tax = r2(amt * (Number(src.taxPct) || 0) / 100);
-  if(hold) return { tax, parts: {}, extra: 0, hold: true };
   payback = Math.min(Number(payback) || 0, r2(amt - tax));
+  if(hold) return { tax, parts: {}, extra: 0, hold: true, payback };
   let left = r2(amt - tax - payback);
   const funded = fundedFor(ws);
   const parts = {};
@@ -242,21 +244,26 @@ function allocate(amt, src, ws, hold, payback){
   return { tax, parts, extra: left, payback };
 }
 // leftover = deposits after taxes, minus what went to savings lines, minus what was spent
+const eventTotal = ev => sum(ev.parts || [], x => x.amt);
 function weekSummary(ws){
   const inc = B().income.filter(e => inWeek(e, ws) && !e.hold);
-  const held = sum(B().income.filter(e => inWeek(e, ws)), e => (e.hold ? r2(e.amt - (e.tax || 0)) : 0) + (e.toChecking || 0));
+  const held = sum(B().income.filter(e => inWeek(e, ws)), e => (e.hold ? r2(e.amt - (e.tax || 0) - (e.payback || 0)) : 0) + (e.toChecking || 0));
   const paidBack = sum(B().income.filter(e => inWeek(e, ws)), e => e.payback || 0);
   const gross = sum(inc, e => r2(e.amt - (e.payback || 0) - (e.toChecking || 0))), tax = sum(inc, e => e.tax || 0);
   const saved = sum(inc, e => Object.entries(e.parts || {}).reduce((s, [id, a]) => { const l = lineById(id); return s + (l && l.group === 'save' ? a : 0); }, 0));
   const buys = B().purchases.filter(p => inWeek(p, ws));
-  const spent = sum(buys, p => p.amt);
-  return { gross, held, paidBack, tax, saved, spent, leftover: r2(gross - tax - saved - spent), buys };
+  const evs = B().events.filter(e => inWeek(e, ws));
+  const eventSpend = sum(evs, eventTotal);
+  const spent = r2(sum(buys, p => p.amt) + eventSpend);
+  const came = sum(B().income.filter(e => inWeek(e, ws)), e => e.amt);
+  const savedAll = r2(saved + paidBack);
+  return { gross, held, paidBack, tax, saved, savedAll, came, spent, eventSpend, evs, leftover: r2(gross - tax - saved - spent), buys };
 }
 function pastWeekStarts(){
   const cur = weekStart(todayStr());
   const set = new Set();
   const b = B();
-  [...b.income, ...b.purchases, ...b.work].forEach(e => { const ws = weekStart(e.date); if(ws < cur) set.add(ws); });
+  [...b.income, ...b.purchases, ...b.work, ...b.events].forEach(e => { const ws = weekStart(e.date); if(ws < cur) set.add(ws); });
   return Array.from(set).sort().reverse().slice(0, 12);
 }
 const moveFor = ws => B().moves.find(m => m.week === ws);
@@ -335,33 +342,30 @@ function renderBanner(){
   if(!ws) return '';
   const s = weekSummary(ws);
   return `<div class="bd-card bd-banner"><div class="bd-pin"></div>
-    <div class="bd-label">new week — move last week's leftover to savings</div>
-    <div style="font-size:14px;">${weekLabel(ws)} left <b>${money(s.leftover)}</b> after taxes, savings and spending. Log any bills you paid first, then move what's left${B().cushion > 0 ? ` (keep ${money(B().cushion)} in checking)` : ''}.</div>
+    <div class="bd-label">last week had some left</div>
+    <div style="font-size:14px;">${weekLabel(ws)} had <b>${money(s.leftover)}</b> left. If you'd like, move it to savings${B().cushion > 0 ? ` (about ${money(B().cushion)} usually stays in checking)` : ''}.</div>
     <div class="bd-f" style="margin-top:10px;"><span class="bd-hint">move it to</span>
       <select id="bdDest">${saveDestinations().map(d => `<option>${escapeHtml(d)}</option>`).join('')}</select>
-      <button class="bd-btn" id="bdMoved" data-week="${ws}">I moved it</button>
-      <span class="bd-link" id="bdSkip" data-week="${ws}">nothing to move</span></div></div>`;
+      <button class="bd-btn" id="bdMoved" data-week="${ws}">I moved it 🌱</button>
+      <span class="bd-link" id="bdSkip" data-week="${ws}">not now</span></div></div>`;
 }
 
 function renderHero(ws){
-  const b = B();
-  const worked = workPay(b.work.filter(w => inWeek(w, ws)));
-  const funded = fundedFor(ws);
-  const covered = Math.min(planTotal(), sum(Object.values(funded).map(v => ({ v })), x => x.v));
-  const short = orderedLines().filter(l => (funded[l.id] || 0) < weekTarget(l, ws) - 0.004 && weekTarget(l, ws) > 0);
-  const goal = b.weeklyGoal || 0;
-  const pct = (v, t) => t > 0 ? Math.max(0, Math.min(100, v / t * 100)) : 0;
-  return `<div class="bd-card bd-hero"><div class="bd-pin"></div>
-    <div class="bd-stat"><div class="bd-k">worked &amp; logged this week</div>
-      <div class="bd-v">${money(worked)}${goal > 0 ? ` <small>of ~${money(goal)}</small>` : ''}</div>
-      ${goal > 0 ? `<div class="bd-bar"><i style="width:${pct(worked, goal)}%"></i></div>
-      <div class="bd-s">${worked >= goal ? 'weekly goal reached 🎉' : `${money(goal - worked)} more to hit my weekly goal`}</div>` : `<div class="bd-s">set a weekly goal in my plan to track it</div>`}
-    </div>
-    <div class="bd-stat"><div class="bd-k">paid this week &amp; set aside for my plan</div>
-      <div class="bd-v">${money(covered)} <small>of ${money(planTotal())}</small></div>
-      <div class="bd-bar"><i style="width:${pct(covered, planTotal())}%"></i></div>
-      <div class="bd-s">${short.length === 0 ? 'every line is funded for the week 🎉' : `${money(r2(planTotal() - covered))} still to cover · ${short.length} line${short.length === 1 ? '' : 's'} not full yet`}</div>
-    </div>
+  const s = weekSummary(ws);
+  const upcoming = s.evs.filter(ev => ev.date > todayStr());
+  const upAmt = sum(upcoming, eventTotal);
+  const went = r2(s.spent - upAmt);
+  const left = r2(s.came - s.tax - s.paidBack - s.saved - s.held - went);
+  const bits = [];
+  if(s.savedAll > 0) bits.push(`+${money(s.savedAll)} saved this week`);
+  if(s.tax > 0) bits.push(`${money(s.tax)} set aside for taxes`);
+  if(upAmt > 0) bits.push(`coming up: ${upcoming.map(ev => escapeHtml(ev.name)).join(', ')} ${money(upAmt)}`);
+  const note = bits.length ? bits.join(' · ') : 'a quiet week so far';
+  return `<div class="bd-card bd-hero bd-three"><div class="bd-pin"></div>
+    <div class="bd-stat"><div class="bd-k">came in</div><div class="bd-v">${money(s.came)}</div></div>
+    <div class="bd-stat"><div class="bd-k">went out</div><div class="bd-v">${money(went)}</div></div>
+    <div class="bd-stat"><div class="bd-k">left</div><div class="bd-v">${money(left)}</div></div>
+    <div class="bd-s bd-note3">${note}${left < -0.004 ? ' · a little more went out than came in — it comes from earlier weeks, and that\'s okay' : ''}</div>
   </div>`;
 }
 
@@ -377,7 +381,6 @@ function renderWork(ws){
     if(s.mode === 'hours'){
       const h = sum(mine, w => w.hours || 0), pay = sum(mine, w => w.amt);
       summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${h > 0 ? `${h} h · ${money(pay)} · ${money(pay / h)}/hr` : 'none yet'}</b></div>`;
-      if(s.hoursGoal > 0) summary += `<div class="bd-bar" style="margin:2px 0 8px;"><i style="width:${Math.min(100, h / s.hoursGoal * 100)}%"></i></div>`;
     } else {
       const full = mine.filter(w => w.type === 'full').length, half = mine.filter(w => w.type === 'half').length;
       summary += `<div class="bd-wkline"><span>${escapeHtml(s.name)} this week</span><b>${(full || half) ? `${[full ? full + ' full' : '', half ? half + ' half' : ''].filter(Boolean).join(' + ')} · ${money(sum(mine, w => w.amt))}` : 'none yet'}</b></div>`;
@@ -390,7 +393,7 @@ function renderWork(ws){
       <label>I made</label><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ I made" data-bdin="wMade" value="${attr(d.wMade)}" /></div>` : ''}
     <div class="bd-f"><label>worked on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="wDate" value="${attr(d.wDate || defDate())}" /></div>
     <div class="bd-f"><button class="bd-btn" id="bdWorkAdd">${isShift ? 'log shift' : 'log time'}</button><span class="bd-err">${escapeHtml(d.err.work || '')}</span></div>
-    ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">Log what you made right after a shift. Money only counts toward your plan when you enter it under "I got paid".</div>` : ''}
+    ${isShift ? `<div class="bd-hint" style="margin-bottom:10px;">Log what you made right after a shift. Money shows up in "came in" when you enter it under "I got paid".</div>` : ''}
     ${summary}
   </div>`;
 }
@@ -401,52 +404,38 @@ function renderIncomeCard(){
   if(!d.iSrc || !srcById(d.iSrc)) d.iSrc = srcs[0].id;
   const s = srcById(d.iSrc);
   return `<div class="bd-card"><div class="bd-pin"></div>
-    <div class="bd-label">I got paid</div>
+    <div class="bd-label">money came in</div>
     <div class="bd-seg">${srcs.map(x => `<span class="${x.id === d.iSrc ? 'on' : ''}" data-bdisrc="${x.id}">${escapeHtml(x.name)}</span>`).join('')}</div>
     <div class="bd-f"><input id="bdIAmt" class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ amount" data-bdin="iAmt" value="${attr(d.iAmt)}" />
       ${s.taxPct > 0 ? `<span class="bd-hint">${s.taxPct}% will be set aside for taxes</span>` : ''}</div>
-    <div class="bd-f"><span class="bd-chip ${d.iHold ? 'ok' : 'flat'}" data-bdihold="1" style="cursor:pointer;">${d.iHold ? '✓ ' : ''}emergency — keep all in checking</span>
-      ${d.iHold ? `<div class="bd-hint">Only taxes get set aside (if this source has them). The rest isn't used for bills or savings, it just stays in checking${B().cushion > 0 ? ` toward your ${money(B().cushion)} cushion` : ''}.</div>` : ''}</div>
+    <div class="bd-f"><span class="bd-chip ${d.iHold ? 'ok' : 'flat'}" data-bdihold="1" style="cursor:pointer;">${d.iHold ? '✓ ' : ''}just log it, keep it in checking</span>
+      ${d.iHold ? `<div class="bd-hint">No suggestion — it just gets logged${s.taxPct > 0 ? ' (taxes still set aside)' : ''} and stays in checking.</div>` : ''}</div>
     <div class="bd-f"><label>paid on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="iDate" value="${attr(d.iDate || defDate())}" /></div>
-    <div class="bd-f"><button class="bd-btn" id="bdIncGo">show me where it goes</button><span class="bd-err">${escapeHtml(d.err.inc || '')}</span></div>
-    <div class="bd-hint">I split it by priority: taxes, then must-pays, savings, everyday, flexible.</div></div>`;
+    <div class="bd-f"><button class="bd-btn" id="bdIncGo">${d.iHold ? 'log it' : 'log it + see a suggestion'}</button><span class="bd-err">${escapeHtml(d.err.inc || '')}</span></div>
+    <div class="bd-hint">The suggestion is optional — you can ignore it.</div></div>`;
 }
 
 function renderPreview(){
   const pv = BD().preview;
   if(!pv) return '';
   const { plan, amt, src } = pv, wsP = weekStart(pv.date || todayStr()), funded = fundedFor(wsP);
-  const rows = orderedLines().filter(l => plan.parts[l.id]).map(l => {
-    const after = r2((funded[l.id] || 0) + plan.parts[l.id]), t = weekTarget(l, wsP);
-    return `<div class="bd-pvrow"><span class="n">${escapeHtml(l.name)}<small>${after >= t - 0.004 ? 'fully funded for the week' : `${money(after)} of ${money(t)} — still needs ${money(r2(t - after))}`}</small></span><b>${money(plan.parts[l.id])}</b></div>`;
-  }).join('');
-  const afterF = Object.assign({}, funded); Object.entries(plan.parts).forEach(([id, a]) => { afterF[id] = r2((afterF[id] || 0) + a); });
-  const stillShort = orderedLines().filter(l => weekTarget(l, wsP) > 0 && (afterF[l.id] || 0) < weekTarget(l, wsP) - 0.004);
-  const need = r2(stillShort.reduce((s, l) => s + (weekTarget(l, wsP) - (afterF[l.id] || 0)), 0));
   const owing = outstandingBorrows().filter(() => src && (srcById(src.id) || {}).mode === 'days');
-  let msg;
-  if(pv.hold) return `<div class="bd-card bd-preview bd-full" id="bdPreview"><div class="bd-pin"></div>
-    <div class="bd-label">${money(amt)} from ${escapeHtml(src.name)} — emergency</div>
-    ${plan.tax > 0 ? `<div class="bd-pvrow tax"><span class="n">Tax set-aside<small>${src.taxPct}% of ${escapeHtml(src.name)} pay — don't spend this</small></span><b>${money(plan.tax)}</b></div>` : ''}
-    <div class="bd-pvrow"><span class="n">Stays in checking<small>emergency cushion — not used for bills or savings</small></span><b>${money(r2(amt - plan.tax))}</b></div>
-    ${B().cushion > 0 ? `<div class="bd-hint" style="margin-top:6px;">Keep at least <b>${money(B().cushion)}</b> in checking.</div>` : ''}
-    <div class="bd-f" style="margin-top:12px;"><button class="bd-btn" id="bdPvSave">save this</button><button class="bd-btn ghost" id="bdPvCancel">cancel</button></div></div>`;
-  if(plan.extra > 0.004) msg = `<div class="bd-pvmsg ok">Everything this week is funded, with <b>${money(plan.extra)}</b> extra. Good places for it: your savings, or a cushion for a slow week.</div>`;
-  else if(stillShort.length){
-    const flex = stillShort.filter(l => l.group === 'flex' || l.group === 'spend').map(l => l.name).reverse().slice(0, 2);
-    msg = `<div class="bd-pvmsg warn">After this you still need <b>${money(need)}</b> to fully cover the week. ${flex.length ? `If money runs short, drop ${flex.map(escapeHtml).join(' and ')} first — they're your flexible lines.` : ''}</div>`;
-  } else msg = `<div class="bd-pvmsg ok">That covers the rest of your week. 🎉</div>`;
-  if(B().cushion > 0) msg += `<div class="bd-hint" style="margin-top:6px;">Keep at least <b>${money(B().cushion)}</b> in checking.</div>`;
+  const btns = `<div class="bd-f" style="margin-top:12px;"><button class="bd-btn" id="bdPvSave">save this</button><button class="bd-btn ghost" id="bdPvCancel">cancel</button></div>`;
+  const head = `<div class="bd-label">${money(amt)} from ${escapeHtml(src.name)}</div>`;
+  const taxRow = plan.tax > 0 ? `<div class="bd-pvrow tax"><span class="n">Set aside for taxes<small>${src.taxPct}% of ${escapeHtml(src.name)} pay</small></span><b>${money(plan.tax)}</b></div>` : '';
+  const payRow = plan.payback > 0 ? `<div class="bd-pvrow tax"><span class="n">Back to ${escapeHtml(((B().buckets.find(k => k.id === owing[0].bucket) || {}).name) || 'savings')}<small>earlier money you borrowed — stays in savings</small></span><b>${money(plan.payback)}</b></div>` : '';
+  if(pv.hold) return `<div class="bd-card bd-preview bd-full" id="bdPreview"><div class="bd-pin"></div>${head}${taxRow}${payRow}
+    <div class="bd-pvrow"><span class="n">Stays in checking<small>just logged, no suggestion</small></span><b>${money(r2(amt - plan.tax - (plan.payback || 0)))}</b></div>${btns}</div>`;
+  const rows = orderedLines().filter(l => plan.parts[l.id]).map(l => `<div class="bd-pvrow"><span class="n">${escapeHtml(l.name)}<small>usually ${money(weekTarget(l, wsP))} a week</small></span><b>${money(plan.parts[l.id])}</b></div>`).join('');
+  const msg = plan.extra > 0.004 ? `<div class="bd-pvmsg ok">${money(plan.extra)} more is yours — keep it in checking or put it toward savings.</div>` : '';
   return `<div class="bd-card bd-preview bd-full" id="bdPreview"><div class="bd-pin"></div>
-    <div class="bd-label">here's where ${money(amt)} from ${escapeHtml(src.name)} goes</div>
-    ${plan.tax > 0 ? `<div class="bd-pvrow tax"><span class="n">Tax set-aside<small>${src.taxPct}% of ${escapeHtml(src.name)} pay — don't spend this</small></span><b>${money(plan.tax)}</b></div>` : ''}
-    ${plan.payback > 0 ? `<div class="bd-pvrow tax"><span class="n">Pay back ${escapeHtml(((B().buckets.find(k => k.id === owing[0].bucket) || {}).name) || 'savings')}<small>comes off the top first, stays in savings — only the rest is split below</small></span><b>${money(plan.payback)}</b></div>` : ''}
-    ${rows}${msg}
-    <div class="bd-f" style="margin-top:12px;"><button class="bd-btn" id="bdPvSave">save this</button><button class="bd-btn ghost" id="bdPvCancel">cancel</button></div></div>`;
+    <div class="bd-label">a suggestion for ${money(amt)} <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">totally optional</small></div>
+    ${taxRow}${payRow}${rows}${msg}
+    <div class="bd-hint" style="margin-top:6px;">${B().cushion > 0 ? `About ${money(B().cushion)} usually stays in checking. ` : ''}Saving just logs it.</div>${btns}</div>`;
 }
 
 function renderLines(ws){
-  const funded = fundedFor(ws), off0 = true;
+  const funded = fundedFor(ws);
   const spent = {};
   B().purchases.filter(p => inWeek(p, ws)).forEach(p => { spent[p.line] = r2((spent[p.line] || 0) + p.amt); });
   let h = '';
@@ -455,23 +444,22 @@ function renderLines(ws){
     if(!ls.length) return;
     h += `<div class="bd-grp">${g.label}</div>`;
     ls.forEach(l => {
-      const monthly = l.period === 'month';
-      const isSave = g.id === 'save' || monthly;
+      const monthly = l.period === 'month', isSave = g.id === 'save' || monthly;
       const adj = adjOf(B(), ws), isCov = (adj.covered || []).includes(l.id), isSkip = !!(adj.skip && adj.skip[l.id] !== undefined);
-      const tf = weekTarget(l, ws), carryIn = r2(tf - (isCov || isSkip ? 0 : wkTarget(l)));
-      const t = isSave ? tf : wkTarget(l), f = funded[l.id] || 0;
-      const used = isSave ? f : (spent[l.id] || 0), left = r2(t - used);
-      const ok = f >= tf - 0.004;
-      const chip = isCov ? `<span class="bd-chip ok">paid already</span>` : (isSkip ? `<span class="bd-chip flat">skipped · carries over</span>` : (ok ? `<span class="bd-chip ok">funded</span>` : `<span class="bd-chip short">needs ${money(r2(tf - f))}</span>`));
-      const over = !isSave && left < -0.004;
-      h += `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span>${(t > 0 || isCov || isSkip) ? chip : ''}<span class="rt ${over ? 'bad' : ''}">${isSave ? (isSkip ? `skipped (${money(adj.skip[l.id])} carries to next week)` : `${money(f)} of ${money(t)} set aside${monthly ? ' · monthly' : ''}${carryIn > 0 ? ` (incl. ${money(carryIn)} carried over)` : ''}`) : (over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`)}</span></div>
-        <div class="bd-bar ${over ? 'over' : ''}" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, used / t * 100) : 0}%"></i></div>
-        ${off0 ? `<div style="margin-top:4px;"><span class="bd-link" data-bdcover="${l.id}|${ws}|${isSave ? 'skip' : 'cov'}">${isCov || isSkip ? 'undo' : (isSave ? 'skip this week (carry over)' : 'already paid this week')}</span></div>` : ''}</div>`;
+      const usual = isSave ? weekTarget(l, ws) : wkTarget(l), f = funded[l.id] || 0, sp = spent[l.id] || 0;
+      const used = isSave ? f : sp;
+      const chip = isCov ? `<span class="bd-chip ok">already covered</span>` : (isSkip ? `<span class="bd-chip flat">skipped this week</span>` : '');
+      const rt = isSave
+        ? (isSkip ? `skipped (${money(adj.skip[l.id])} moves to next week)` : `saved ${money(f)}${usual > 0 ? ` · usually ${money(usual)}` : ''}${monthly ? ' · monthly' : ''}`)
+        : (monthly ? `spent ${money(sp)} this week` : `spent ${money(sp)}${usual > 0 ? ` · usually ${money(usual)}` : ''}`);
+      h += `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span>${chip}<span class="rt">${rt}</span></div>
+        <div class="bd-bar" style="margin-top:7px;"><i style="width:${usual > 0 ? Math.min(100, used / usual * 100) : 0}%"></i></div>
+        <div style="margin-top:4px;"><span class="bd-link" data-bdcover="${l.id}|${ws}|${isSave ? 'skip' : 'cov'}">${isCov || isSkip ? 'undo' : (isSave ? 'skip this week' : 'already covered this week')}</span></div></div>`;
     });
   });
   const taxSaved = sum(B().income.filter(e => inWeek(e, ws)), e => e.tax || 0);
-  if(taxSaved > 0) h += `<div class="bd-grp">tax set-aside</div><div class="bd-line"><div class="top"><span class="nm">Saved for taxes this week</span><span class="rt">${money(taxSaved)}</span></div></div>`;
-  return `<div class="bd-card"><div class="bd-pin"></div><div class="bd-label">my week</div>${h}</div>`;
+  if(taxSaved > 0) h += `<div class="bd-grp">taxes</div><div class="bd-line"><div class="top"><span class="nm">Set aside for taxes this week</span><span class="rt">${money(taxSaved)}</span></div></div>`;
+  return `<div class="bd-card"><div class="bd-pin"></div><div class="bd-label">what I usually spend</div>${h}</div>`;
 }
 
 // Monthly lines: what you've spent so far this calendar month against the monthly amount.
@@ -481,11 +469,11 @@ function renderMonth(ws){
   const ref = (BD().wkOff || 0) === 0 ? todayStr() : addDays(ws, 6), ym = ref.slice(0, 7);
   const name = parseDay(ref).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const rows = lines.map(l => {
-    const t = Number(l.target) || 0, sp = sum(B().purchases.filter(p => p.line === l.id && p.date.slice(0, 7) === ym), p => p.amt), left = r2(t - sp), over = left < -0.004;
-    return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span><span class="rt ${over ? 'bad' : ''}">${over ? `over by ${money(-left)}` : `${money(left)} left of ${money(t)}`}</span></div>
-      <div class="bd-bar ${over ? 'over' : ''}" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, sp / t * 100) : 0}%"></i></div></div>`;
+    const t = Number(l.target) || 0, sp = sum(B().purchases.filter(p => p.line === l.id && p.date.slice(0, 7) === ym), p => p.amt);
+    return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(l.name)}</span><span class="rt">spent ${money(sp)} · usually ${money(t)}</span></div>
+      <div class="bd-bar" style="margin-top:7px;"><i style="width:${t > 0 ? Math.min(100, sp / t * 100) : 0}%"></i></div></div>`;
   }).join('');
-  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">this month <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">${name}</small></div>${rows}<div class="bd-hint" style="margin-top:6px;">monthly bills are set aside a little each week, and counted here when you spend them</div></div>`;
+  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">this month <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">${name}</small></div>${rows}<div class="bd-hint" style="margin-top:6px;">monthly things are set aside a little each week and shown here when you spend them</div></div>`;
 }
 
 function goalStats(g){
@@ -503,8 +491,8 @@ function renderGoals(){
     const st = goalStats(g), weekly = st.line ? wkTarget(st.line) : 0;
     let status;
     if(st.left <= 0.004) status = '<span class="bd-chip ok">done 🎉</span>';
-    else if(g.due && daysBetween(todayStr(), g.due) < 0) status = '<span class="bd-chip over">past due</span>';
-    else if(g.due && weekly > 0) status = weekly * st.wks >= st.left - 0.004 ? '<span class="bd-chip ok">on track</span>' : `<span class="bd-chip short">needs ${money(r2(st.left / st.wks))}/wk</span>`;
+    else if(g.due && daysBetween(todayStr(), g.due) < 0) status = '<span class="bd-chip flat">date passed</span>';
+    else if(g.due && weekly > 0) status = weekly * st.wks >= st.left - 0.004 ? '<span class="bd-chip ok">on track</span>' : `<span class="bd-chip flat">about ${money(r2(st.left / st.wks))}/wk to finish by then</span>`;
     else status = '';
     const due = g.due ? `due ${dayLabel(g.due)} · ${daysBetween(todayStr(), g.due) < 0 ? 'passed' : `${st.wks} week${st.wks === 1 ? '' : 's'} left`}` : '';
     return `<div class="bd-card"><div class="bd-pin"></div><div class="bd-label">${escapeHtml(g.name)} <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">goal</small></div>
@@ -538,8 +526,8 @@ function renderPayback(){
   if(!out.length) return '';
   return out.map(x => { const k = B().buckets.find(y => y.id === x.bucket);
     return `<div class="bd-card bd-banner"><div class="bd-pin"></div>
-      <div class="bd-label">pay back first</div>
-      <div style="font-size:14px;">You borrowed <b>${money(x.amt)}</b> from ${escapeHtml(k ? k.name : 'savings')} on ${dayLabel(x.date)}. When your next sub check lands, move ${money(x.amt)} back to savings <b>before</b> anything else.</div>
+      <div class="bd-label">a gentle reminder</div>
+      <div style="font-size:14px;">You borrowed <b>${money(x.amt)}</b> from ${escapeHtml(k ? k.name : 'savings')} on ${dayLabel(x.date)}. When your next sub check lands, you can move ${money(x.amt)} back to savings <b>before</b> anything else.</div>
       <div class="bd-f" style="margin-top:10px;"><button class="bd-btn" data-bdpayback="${x.id}">I paid it back</button></div></div>`; }).join('');
 }
 function renderAccounts(ws){
@@ -550,17 +538,17 @@ function renderAccounts(ws){
     const ls = acctLines(a), names = ls.map(l => escapeHtml(l.name)).join(', ');
     if(a.kind === 'fun'){
       const load = b.loads[ws] !== undefined ? Number(b.loads[ws]) : sum(ls, l => wkTarget(l)), spent = spentOn(ls, ws), left = r2(load - spent);
-      return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt ${left < -0.004 ? 'bad' : ''}">${left < -0.004 ? `over by ${money(-left)}` : `${money(left)} left`}</span></div>
-        <div class="bd-bar ${left < -0.004 ? 'over' : ''}" style="margin-top:7px;"><i style="width:${load > 0 ? Math.min(100, spent / load * 100) : 0}%"></i></div>
+      return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt">${money(Math.max(0, left))} left this week</span></div>
+        <div class="bd-bar" style="margin-top:7px;"><i style="width:${load > 0 ? Math.min(100, spent / load * 100) : 0}%"></i></div>
         <div class="bd-hint">${escapeHtml(a.what || names)}</div>
-        <div class="bd-f" style="margin-top:6px;"><span class="bd-hint">loaded this week $</span><input type="number" inputmode="decimal" class="w" style="width:84px;" data-bdload="${ws}" value="${attr(String(load))}" /><span class="bd-hint">${spent > 0 ? `spent ${money(spent)}` : 'nothing spent yet'} · no refills mid-week</span></div></div>`;
+        <div class="bd-f" style="margin-top:6px;"><span class="bd-hint">loaded this week $</span><input type="number" inputmode="decimal" class="w" style="width:84px;" data-bdload="${ws}" value="${attr(String(load))}" /><span class="bd-hint">${spent > 0 ? `spent ${money(spent)}` : 'nothing spent yet'}</span></div></div>`;
     }
     if(a.kind === 'checking'){
       const bal = a.balance === undefined || a.balance === '' || a.balance === null ? '' : Number(a.balance), min = Number(a.min) || b.cushion || 0, low = bal !== '' && bal < min;
-      return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt ${low ? 'bad' : ''}">${bal === '' ? `keep ${money(min)}+` : money(bal)}</span></div>
-        ${low ? `<div class="bd-pvmsg warn" style="margin:6px 0;">Checking is below ${money(min)} — it's short by <b>${money(r2(min - bal))}</b>. Hold off on extras and put the next deposit here first.</div>` : ''}
+      return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt">${bal === '' ? `about ${money(min)} usually` : money(bal)}</span></div>
+        ${low ? `<div class="bd-pvmsg ok" style="margin:6px 0;">Checking is a little under ${money(min)} right now — a nice place for the next deposit.</div>` : ''}
         <div class="bd-hint">${escapeHtml(a.what || names)}</div>
-        <div class="bd-f" style="margin-top:6px;"><span class="bd-hint">balance now $</span><input type="number" inputmode="decimal" class="w" style="width:96px;" data-bdbal="${a.id}" value="${bal === '' ? '' : attr(String(bal))}" placeholder="type it in" /><span class="bd-hint">keep at least ${money(min)}</span></div></div>`;
+        <div class="bd-f" style="margin-top:6px;"><span class="bd-hint">balance now $</span><input type="number" inputmode="decimal" class="w" style="width:96px;" data-bdbal="${a.id}" value="${bal === '' ? '' : attr(String(bal))}" placeholder="type it in" /><span class="bd-hint">about ${money(min)} usually stays here</span></div></div>`;
     }
     if(a.kind === 'savings'){
       const tot = sum(b.buckets, k => bucketBalance(k) - owedBack(k));
@@ -570,36 +558,48 @@ function renderAccounts(ws){
     return `<div class="bd-line"><div class="top"><span class="nm">${escapeHtml(a.name)}</span><span class="rt">${ls.length && lim > 0 ? `${money(r2(lim - spent))} left of ${money(lim)}` : ''}</span></div><div class="bd-hint">${escapeHtml(a.what || names)}</div></div>`;
   }).join('');
   const lag = lagSrc.length ? `<div class="bd-hint" style="margin-top:8px;">${lagSrc.map(x => escapeHtml(x.name)).join(' & ')} pay arrives about ${Math.max(...lagSrc.map(x => Number(x.holdDays)))} days after you work it. Plan by days worked; the checking cushion covers the gap.</div>` : '';
-  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">accounts</div>${rows}${lag}</div>`;
+  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">my accounts</div>${rows}${lag}</div>`;
 }
 function renderSafety(){
   const b = B(), taxTotal = sum(b.income, e => e.tax || 0), hasTax = b.sources.some(s => s.taxPct > 0);
   if(!b.buckets.length && !hasTax && !(b.cushion > 0)) return '';
   const rows = [];
   if(hasTax && !b.buckets.some(k => k.tax)) rows.push(`<div class="bd-line"><div class="top"><span class="nm">Taxes</span><span class="rt">${money(taxTotal)} set aside so far</span></div><div class="bd-hint">${b.sources.filter(s => s.taxPct > 0).map(s => `${s.taxPct}% of ${escapeHtml(s.name)} pay`).join(' · ')}, taken out of each deposit</div></div>`);
-  b.buckets.forEach(k => { const owe = owedBack(k), bal = bucketBalance(k); rows.push(`<div class="bd-line"><div class="top"><span class="nm">${k.locked ? '🔒 ' : ''}${escapeHtml(k.name)}</span><span class="rt">${money(r2(bal - owe))}</span></div>${owe > 0 ? `<div class="bd-hint">${money(bal)} minus ${money(owe)} borrowed — pay it back first</div>` : ''}${k.note ? `<div class="bd-hint">${escapeHtml(k.note)}</div>` : (k.locked ? '<div class="bd-hint">don\'t touch</div>' : '')}</div>`); });
-  if(b.cushion > 0) rows.push(`<div class="bd-line"><div class="top"><span class="nm">Checking cushion</span><span class="rt">keep ${money(b.cushion)} minimum</span></div></div>`);
-  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">safety nets</div>${rows.join('')}</div>`;
+  b.buckets.forEach(k => { const owe = owedBack(k), bal = bucketBalance(k); rows.push(`<div class="bd-line"><div class="top"><span class="nm">${k.locked ? '🔒 ' : ''}${escapeHtml(k.name)}</span><span class="rt">${money(r2(bal - owe))}</span></div>${owe > 0 ? `<div class="bd-hint">${money(bal)} saved, ${money(owe)} borrowed for now</div>` : ''}${k.note ? `<div class="bd-hint">${escapeHtml(k.note)}</div>` : (k.locked ? '<div class="bd-hint">set aside</div>' : '')}</div>`); });
+  if(b.cushion > 0) rows.push(`<div class="bd-line"><div class="top"><span class="nm">Checking</span><span class="rt">about ${money(b.cushion)} usually stays</span></div></div>`);
+  return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">savings buckets</div>${rows.join('')}</div>`;
 }
 
 function renderPurchase(){
   const d = BD(), lines = orderedLines().filter(l => l.group !== 'save');
   if(!lines.find(l => l.id === d.pLine)) d.pLine = lines.length ? lines[0].id : '';
   return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-tape"></div>
-    <div class="bd-label">I bought something</div>
+    <div class="bd-label">I spent something</div>
     <div class="bd-f"><input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ amount" data-bdin="pAmt" value="${attr(d.pAmt)}" />
       <select data-bdin="pLine">${lines.map(l => `<option value="${l.id}" ${l.id === d.pLine ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}</select></div>
     <div class="bd-f"><input class="bd-note" type="text" placeholder="note (optional)" maxlength="40" data-bdin="pNote" value="${attr(d.pNote)}" /></div>
-    <div class="bd-f"><label>bought on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="pDate" value="${attr(d.pDate || defDate())}" /></div>
-    <div class="bd-f"><button class="bd-btn" id="bdBuyAdd">add purchase</button><span class="bd-err">${escapeHtml(d.err.buy || '')}</span></div></div>`;
+    <div class="bd-f"><label>spent on</label><input class="bd-date" type="date" max="${todayStr()}" data-bdin="pDate" value="${attr(d.pDate || defDate())}" /></div>
+    <div class="bd-f"><button class="bd-btn" id="bdBuyAdd">log it</button><span class="bd-err">${escapeHtml(d.err.buy || '')}</span></div></div>`;
+}
+
+function renderEvent(){
+  const d = BD();
+  return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-tape"></div>
+    <div class="bd-label">a fun event or trip</div>
+    <div class="bd-f"><input class="bd-note" type="text" placeholder="e.g. weekend trip" maxlength="40" data-bdin="evName" value="${attr(d.evName || '')}" />
+      <input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ total" data-bdin="evAmt" value="${attr(d.evAmt || '')}" /></div>
+    <div class="bd-f"><label>on</label><input class="bd-date" type="date" data-bdin="evDate" value="${attr(d.evDate || defDate())}" /></div>
+    <div class="bd-f"><button class="bd-btn" id="bdEvAdd">log it</button><span class="bd-err">${escapeHtml(d.err.ev || '')}</span></div>
+    <div class="bd-hint">One-offs go in "went out" but don't count toward your usual weekly spending.</div></div>`;
 }
 
 function renderRecent(){
   const b = B(), items = [];
-  b.income.forEach(e => items.push({ k: 'in', kind: 'income', id: e.id, date: e.date, ts: e.ts || 0, t: `Paid · ${escapeHtml((srcById(e.src) || { name: 'income' }).name)}`, s: e.hold ? `${money(r2(e.amt - (e.tax || 0)))} kept in checking${e.tax > 0 ? `, ${money(e.tax)} for taxes` : ''}` : (e.tax > 0 ? `${money(e.tax)} set aside for taxes` : ''), a: e.amt }));
+  b.income.forEach(e => items.push({ k: 'in', kind: 'income', id: e.id, date: e.date, ts: e.ts || 0, t: `Came in · ${escapeHtml((srcById(e.src) || { name: 'income' }).name)}`, s: e.hold ? `${money(r2(e.amt - (e.tax || 0)))} kept in checking${e.tax > 0 ? `, ${money(e.tax)} for taxes` : ''}` : (e.tax > 0 ? `${money(e.tax)} set aside for taxes` : ''), a: e.amt }));
   b.purchases.forEach(p => items.push({ k: 'out', kind: 'purchase', id: p.id, date: p.date, ts: p.ts || 0, t: escapeHtml((lineById(p.line) || { name: 'removed line' }).name), s: escapeHtml(p.note || ''), a: p.amt }));
+  b.events.forEach(ev => items.push({ k: 'out', kind: 'event', id: ev.id, date: ev.date, ts: ev.ts || 0, t: escapeHtml(ev.name), s: (ev.parts || []).filter(x => x.label).map(x => `${escapeHtml(x.label)} ${money(x.amt)}`).join(' + ') + (ev.date > todayStr() ? ((ev.parts || []).some(x => x.label) ? ' · ' : '') + 'coming up' : ''), a: eventTotal(ev) }));
   b.work.forEach(w => { const s = srcById(w.src) || { name: 'work' }; items.push({ k: 'work', kind: 'work', id: w.id, date: w.date, ts: w.ts || 0, t: w.type === 'shift' ? `${escapeHtml(s.name)} · ${w.hours} h` : `${escapeHtml(s.name)} · ${w.type} day`, s: '', a: w.amt }); });
-  b.moves.filter(m => m.dest !== 'skipped').forEach(m => items.push({ k: 'save', kind: 'move', id: m.id, date: m.date, ts: 0, t: `Moved leftover to ${escapeHtml(m.dest)}`, s: weekLabel(m.week), a: m.amt }));
+  b.moves.filter(m => m.dest !== 'skipped').forEach(m => items.push({ k: 'save', kind: 'move', id: m.id, date: m.date, ts: 0, t: `Moved to ${escapeHtml(m.dest)}`, s: weekLabel(m.week), a: m.amt }));
   items.sort((x, y) => y.date.localeCompare(x.date) || y.ts - x.ts);
   const icon = { in: '↓', out: '↑', work: '⏱', save: '★' };
   const d = BD(), shown = d.recentAll ? items : items.slice(0, 8);
@@ -617,23 +617,24 @@ function renderPast(){
   const rows = weeks.map(ws => {
     const s = weekSummary(ws), mv = moveFor(ws);
     const chip = s.leftover > 0.004
-      ? (mv ? (mv.dest === 'skipped' ? `<span class="bd-chip flat">${money(s.leftover)} skipped</span>` : `<span class="bd-chip ok">${money(s.leftover)} → ${escapeHtml(mv.dest.replace(/ savings$/i, ''))} ✓</span>`) : `<span class="bd-chip short">${money(s.leftover)} not moved</span>`)
-      : (s.leftover < -0.004 ? `<span class="bd-chip over">over by ${money(-s.leftover)}</span>` : `<span class="bd-chip flat">on plan</span>`);
+      ? (mv ? (mv.dest === 'skipped' ? `<span class="bd-chip flat">${money(s.leftover)} left</span>` : `<span class="bd-chip ok">${money(s.leftover)} → ${escapeHtml(mv.dest.replace(/ savings$/i, ''))} ✓</span>`) : `<span class="bd-chip flat">${money(s.leftover)} left</span>`)
+      : `<span class="bd-chip flat">${s.leftover < -0.004 ? `−${money(-s.leftover)}` : 'even'}</span>`;
     const open = d.openWeek === ws;
     let det = '';
     if(open){
       const spentBy = {}; s.buys.forEach(p => { spentBy[p.line] = r2((spentBy[p.line] || 0) + p.amt); });
-      det = `<div class="bd-wkdet"><div><span>paid</span><span>${money(s.gross)}</span></div>
-        ${s.tax > 0 ? `<div><span>set aside for taxes</span><span>−${money(s.tax)}</span></div>` : ''}
-        ${s.saved > 0 ? `<div><span>set aside as savings</span><span>−${money(s.saved)}</span></div>` : ''}
-        ${B().lines.filter(l => l.group !== 'save' && (spentBy[l.id] || 0) > 0).map(l => { const sp = spentBy[l.id], t = wkTarget(l), mo = l.period === 'month'; return `<div class="${!mo && sp > t + 0.004 ? 'over' : ''}"><span>${escapeHtml(l.name)}</span><span>${mo ? money(sp) : `${money(sp)} of ${money(t)}`}</span></div>`; }).join('')}
+      det = `<div class="bd-wkdet"><div><span>came in</span><span>${money(s.gross)}</span></div>
+        ${s.tax > 0 ? `<div><span>set aside for taxes</span><span>${money(s.tax)}</span></div>` : ''}
+        ${s.saved > 0 ? `<div><span>saved</span><span>${money(s.saved)}</span></div>
+        ${s.evs.map(ev => `<div><span>${escapeHtml(ev.name)}</span><span>${money(eventTotal(ev))}</span></div>`).join('')}` : ''}
+        ${B().lines.filter(l => l.group !== 'save' && (spentBy[l.id] || 0) > 0).map(l => { const sp = spentBy[l.id], t = wkTarget(l), mo = l.period === 'month'; return `<div><span>${escapeHtml(l.name)}</span><span>${mo ? money(sp) : `${money(sp)} · usually ${money(t)}`}</span></div>`; }).join('')}
         ${Object.keys(spentBy).filter(id => !lineById(id)).length ? `<div><span>removed lines</span><span>${money(sum(Object.keys(spentBy).filter(id => !lineById(id)), id => spentBy[id]))}</span></div>` : ''}
       </div>`;
     }
-    return `<div class="bd-wkrow"><div class="hd" data-bdwk="${ws}"><span class="nm">${weekLabel(ws)}<small>paid ${money(s.gross)}${s.held > 0 ? ` (+${money(s.held)} kept in checking)` : ''}${s.paidBack > 0 ? ` (+${money(s.paidBack)} paid back)` : ''} · spent ${money(s.spent)}</small></span>${chip}<span class="caret">${open ? '▴' : '▾'}</span></div>${det}</div>`;
+    return `<div class="bd-wkrow"><div class="hd" data-bdwk="${ws}"><span class="nm">${weekLabel(ws)}<small>came in ${money(s.came)}${s.held > 0 ? ` (+${money(s.held)} kept in checking)` : ''}${s.paidBack > 0 ? ` (+${money(s.paidBack)} paid back)` : ''} · spent ${money(s.spent)}</small></span>${chip}<span class="caret">${open ? '▴' : '▾'}</span></div>${det}</div>`;
   }).join('');
   return `<div class="bd-card"><div class="bd-tape"></div><div class="bd-label">past weeks</div>
-    <div class="bd-hint" style="margin-bottom:6px;">${tally.length ? 'leftover moved to savings so far: ' + tally.join(' · ') : 'no leftover moved to savings yet'}</div>
+    <div class="bd-hint" style="margin-bottom:6px;">${tally.length ? 'moved to savings so far: ' + tally.join(' · ') : 'nothing moved to savings yet — no rush'}</div>
     ${rows || '<div class="bd-hint">your first finished week will show up here</div>'}</div>`;
 }
 
@@ -653,10 +654,10 @@ function renderWishlist(){
     try{ host = new URL(i.url).hostname.replace(/^www\./, ''); }catch(e){}
     return `<div class="bd-wish ${i.got ? 'got' : ''}"><span class="bd-check ${i.got ? 'on' : ''}" data-bdwgot="${i.id}" title="${i.got ? 'put back on list' : 'I got it'}">${i.got ? '✓' : ''}</span>
       <span class="t">${i.url ? `<a href="${attr(i.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(i.name)}</a>` : escapeHtml(i.name)}${host ? `<small>${escapeHtml(host)}</small>` : ''}</span>
-      <span class="a">${Number(i.price) > 0 ? money(Number(i.price)) : ''}${!i.got && Number(i.price) > 0 ? (Number(i.price) <= spare + 0.004 ? '<small class="bd-aff yes">you could afford this</small>' : `<small class="bd-aff">need ${money(r2(Number(i.price) - spare))} more</small>`) : ''}</span><span class="bd-x" data-bdwdel="${i.id}" title="remove">✕</span></div>`;
+      <span class="a">${Number(i.price) > 0 ? money(Number(i.price)) : ''}${!i.got && Number(i.price) > 0 ? (Number(i.price) <= spare + 0.004 ? '<small class="bd-aff yes">you have room for this</small>' : `<small class="bd-aff">${money(r2(Number(i.price) - spare))} to go</small>`) : ''}</span><span class="bd-x" data-bdwdel="${i.id}" title="remove">✕</span></div>`;
   };
   return `<div class="bd-card" style="margin-bottom:22px;"><div class="bd-tape"></div>
-    <div class="bd-label">wish list <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">things I want when I can afford them</small></div>
+    <div class="bd-label">wish list <small style="font-size:12px;color:var(--ink-soft);font-style:normal;">things I'd like, whenever</small></div>
     <div class="bd-f"><input class="bd-note" type="text" placeholder="what is it?" maxlength="60" data-bdin="xName" value="${attr(d.xName)}" />
       <input class="bd-amt" type="number" inputmode="decimal" step="0.01" placeholder="$ price" data-bdin="xPrice" value="${attr(d.xPrice)}" /></div>
     <div class="bd-f"><input class="bd-note" type="text" inputmode="url" placeholder="link (optional)" data-bdin="xUrl" value="${attr(d.xUrl)}" /></div>
@@ -670,8 +671,8 @@ function renderWishlist(){
 
 function renderSetup(){
   return `<div class="bd-card bd-setup"><div class="bd-pin"></div>
-    <div class="bd-label">set up my plan</div>
-    <div style="font-size:14px;line-height:1.5;">Add your weekly budget lines (like groceries or gas), name your income sources, and set pay days. You only do this once, and you can change it any time.</div>
+    <div class="bd-label">set up my tracker</div>
+    <div style="font-size:14px;line-height:1.5;">Add the things you usually spend on (like groceries or gas), name your income sources, and set pay days. You only do this once, and you can change it any time.</div>
     <div class="bd-f" style="margin-top:12px;"><button class="bd-btn" id="bdSetup">set up my plan</button></div></div>`;
 }
 
@@ -688,7 +689,7 @@ function renderPlanModal(){
     <div class="bd-plan-row"><label>days from a shift until its payday</label><input type="number" inputmode="numeric" data-bdp="src|${i}|holdDays" value="${attr(s.holdDays === undefined ? 1 : s.holdDays)}" /></div>
     <div class="bd-plan-row"><label>% they take out before paying me</label><input type="number" inputmode="decimal" data-bdp="src|${i}|withheldPct" value="${attr(s.withheldPct || '')}" /></div>
     <div class="bd-plan-row"><label>set aside for taxes %</label><input type="number" inputmode="decimal" data-bdp="src|${i}|taxPct" value="${attr(s.taxPct)}" /></div>
-    ${s.mode === 'hours' ? `<div class="bd-plan-row"><label>weekly hours goal</label><input type="number" inputmode="decimal" data-bdp="src|${i}|hoursGoal" value="${attr(s.hoursGoal || '')}" /></div>`
+    ${s.mode === 'hours' ? ''
       : `<div class="bd-plan-row"><label>full day pay $</label><input type="number" inputmode="decimal" data-bdp="src|${i}|full" value="${attr(s.full || '')}" /></div>
          <div class="bd-plan-row"><label>half day pay $</label><input type="number" inputmode="decimal" data-bdp="src|${i}|half" value="${attr(s.half || '')}" /></div>`}
   </div>`).join('');
@@ -702,7 +703,6 @@ function renderPlanModal(){
     <div class="modal-closerow"><span class="expand-btn" id="bdPlanClose">${COLLAPSE_ICON}</span></div>
     <div class="modal-title">My plan</div>
     <div class="bd-plan-h">income</div>${srcBlocks}
-    <div class="bd-plan-row"><label>weekly pay goal $</label><input type="number" inputmode="decimal" data-bdp="goal" value="${attr(p.weeklyGoal || '')}" /></div>
     <div class="bd-plan-row"><label>keep in checking at least $</label><input type="number" inputmode="decimal" data-bdp="cushion" value="${attr(p.cushion || '')}" /></div>
     <div class="bd-plan-h">monthly charges (log themselves)</div>
     ${p.recurring.map((r, i) => `<div class="bd-plan-src"><input type="text" data-bdp="rec|${i}|name" placeholder="name, like Claude" maxlength="30" value="${attr(r.name)}" />
@@ -725,7 +725,7 @@ function renderPlanModal(){
       <select data-bdp="buckets|${i}|locked"><option value="1" ${k.locked ? 'selected' : ''}>don't touch</option><option value="" ${!k.locked ? 'selected' : ''}>ok to use</option></select>
       <span class="bd-x" data-bdkdel="${i}" title="remove">✕</span></div>`).join('')}
     <span class="bd-link" id="bdBucketAdd">+ add one</span>
-    <div class="bd-plan-h">weekly budget lines</div>
+    <div class="bd-plan-h">what I usually spend each week</div>
     ${lineRows || '<div class="bd-hint" style="margin-bottom:8px;">no lines yet — add them below</div>'}
     <span class="bd-link" id="bdPlanAdd">+ add a line</span>
     <div class="bd-plan-h">or paste several at once</div>
@@ -749,9 +749,19 @@ export function renderBudget(){
     ${renderBanner()}
     ${renderHero(ws)}
     <div class="bd-grid">${renderWork(ws)}${renderIncomeCard()}${renderPreview()}</div>
-    <div class="bd-grid"><div>${renderAccounts(ws)}${renderLines(ws)}${renderMonth(ws)}${renderGoals()}${renderSafety()}</div><div>${renderPurchase()}${renderRecent()}${renderWishlist()}${renderPast()}</div></div>
+    <div class="bd-grid"><div>${renderAccounts(ws)}${renderLines(ws)}${renderMonth(ws)}${renderGoals()}${renderSafety()}</div><div>${renderPurchase()}${renderEvent()}${renderRecent()}${renderWishlist()}${renderPast()}</div></div>
     <div class="bd-foot"><span class="bd-link" id="bdEditPlan">edit my plan</span></div>
     ${renderPlanModal()}`;
+}
+
+// small, calm confirmation that fades by itself (not part of the page render, so typing is never interrupted)
+function toast(msg){
+  try{
+    const old = document.getElementById('bdToast'); if(old) old.remove();
+    const t = document.createElement('div'); t.id = 'bdToast'; t.className = 'bd-toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { if(t.parentNode) t.parentNode.removeChild(t); }, 3800);
+  }catch(e){}
 }
 
 // ---------- events ----------
@@ -849,7 +859,7 @@ export function attachBudgetEvents(){
   // deposit -> preview -> save
   on('bdIncGo', () => {
     const src = srcById(d.iSrc), amt = num(d.iAmt);
-    if(!(amt > 0)){ d.err.inc = 'enter the amount you were paid'; render(); return; }
+    if(!(amt > 0)){ d.err.inc = 'enter the amount'; render(); return; }
     d.err.inc = '';
     d.preview = { src: { id: src.id, name: src.name, taxPct: src.taxPct }, amt, date: pickDate(d.iDate), hold: !!d.iHold, plan: allocate(amt, src, weekStart(pickDate(d.iDate)), d.iHold, owedNow(src.id)) };
     d.scroll = 'preview';
@@ -866,18 +876,32 @@ export function attachBudgetEvents(){
     B().income.push({ id: uid(), src: pv.src.id, amt: pv.amt, tax: pv.plan.tax, parts: pv.plan.parts, extra: pv.plan.extra, hold: !!pv.hold, payback: pv.plan.payback || 0, date: today, paidIds: paid.map(w => w.id), ts: Date.now() });
     if(sc.mode !== 'other') B().expected = B().expected.filter(e => !(e.src === pv.src.id && Math.abs(daysBetween(e.date, payDateFor(sc, today))) <= 2));
     if(pv.plan.payback > 0){ let left = pv.plan.payback; outstandingBorrows().forEach(x => { if(left >= x.amt - 0.005){ x.repaid = true; x.repaidOn = today; left = r2(left - x.amt); } }); }
+    const wsT = weekStart(today), sm = weekSummary(wsT), tx = pv.plan.tax || 0;
     d.preview = null; d.iAmt = ''; d.iDate = ''; d.iHold = false;
     render(); saveData();
+    toast(sm.savedAll > 0 ? `+${money(sm.savedAll)} saved this week${tx > 0 ? ` · ${money(tx)} set aside for taxes` : ''} 🌿` : (tx > 0 ? `${money(tx)} set aside for taxes 🌿` : 'Logged — nice and easy 🌿'));
   });
 
   // purchases
   on('bdBuyAdd', () => {
     const amt = num(d.pAmt);
     if(!(amt > 0)){ d.err.buy = 'enter an amount'; render(); return; }
-    if(!d.pLine){ d.err.buy = 'add a budget line first'; render(); return; }
+    if(!d.pLine){ d.err.buy = 'add a category first'; render(); return; }
     B().purchases.push({ id: uid(), line: d.pLine, amt, note: (d.pNote || '').trim(), date: pickDate(d.pDate), ts: Date.now() });
     d.pAmt = ''; d.pNote = ''; d.pDate = ''; d.err.buy = '';
     render(); saveData();
+    toast('Logged. Thanks for keeping track 💛');
+  });
+
+  // fun events / trips
+  on('bdEvAdd', () => {
+    const amt = num(d.evAmt), name = (d.evName || '').trim();
+    if(!name){ d.err.ev = 'what is it?'; render(); return; }
+    if(!(amt > 0)){ d.err.ev = 'enter the total'; render(); return; }
+    B().events.push({ id: uid(), name, date: d.evDate || defDate(), parts: [{ label: '', amt }], ts: Date.now() });
+    d.evName = ''; d.evAmt = ''; d.evDate = ''; d.err.ev = '';
+    render(); saveData();
+    toast('Logged. Have a great time! ✨');
   });
 
   // wish list
@@ -905,6 +929,7 @@ export function attachBudgetEvents(){
     if(!confirm('Delete this entry?')) return;
     const b = B();
     if(kind === 'purchase') b.purchases = b.purchases.filter(x => x.id !== id);
+    else if(kind === 'event') b.events = b.events.filter(x => x.id !== id);
     else if(kind === 'work') b.work = b.work.filter(x => x.id !== id);
     else if(kind === 'income'){
       const e = b.income.find(x => x.id === id);
@@ -918,8 +943,10 @@ export function attachBudgetEvents(){
   on('bdMoved', () => {
     const ws = document.getElementById('bdMoved').getAttribute('data-week');
     const dest = document.getElementById('bdDest').value;
-    B().moves.push({ id: uid(), week: ws, dest, amt: weekSummary(ws).leftover, date: todayStr() });
+    const mvAmt = weekSummary(ws).leftover;
+    B().moves.push({ id: uid(), week: ws, dest, amt: mvAmt, date: todayStr() });
     render(); saveData();
+    toast(`+${money(mvAmt)} moved to savings 🌱`);
   });
   on('bdSkip', () => {
     const ws = document.getElementById('bdSkip').getAttribute('data-week');

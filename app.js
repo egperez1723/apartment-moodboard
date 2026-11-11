@@ -1,7 +1,7 @@
 // The main app shell: bootstraps everything, owns the top-level render()
 // and attachEvents() functions that stitch each feature module together.
 
-import { store, ui, loadData, goHome, renameSpace, createSpace, openSpace, updateSpaceState } from './store.js';
+import { store, ui, loadData, goHome, renameSpace, setSpaceName, createSpace, openSpace, updateSpaceState } from './store.js';
 import { escapeHtml } from './shared.js';
 import { renderCountdown, renderInfoCard, renderBudgetModal, renderFooter, renderHomeScreen,
   renderCourseInfoCard, renderSyllabusCard, attachChromeEvents, attachHomeEvents } from './chrome.js';
@@ -50,7 +50,7 @@ export function render(){
     html += renderBudgetModal();
   }
 
-  const tabs = [{id:'board', label: isCourse ? 'course board' : (isCostumes ? 'costumes' : (isBudget ? 'budget' : 'mood board'))}];
+  const tabs = [{id:'board', label: isCourse ? 'course board' : (isCostumes ? 'costumes' : (isBudget ? 'tracker' : 'mood board'))}];
   if(hasShopping) tabs.push({id:'quick', label:'shopping list'});
   if(hasTodo) tabs.push({id:'todo', label:'stuff to do'});
 
@@ -120,9 +120,9 @@ function importBudgetFromHash(){
   try{ data = JSON.parse(decodeURIComponent(escape(atob(token.replace(/-/g,'+').replace(/_/g,'/'))))); }catch(e){ return; }
   if(!data || !data.budget) return;
   setTimeout(() => {
-    if(!confirm('Create your budget space from this setup link?')) return;
+    if(!confirm('Create your money tracker from this setup link?')) return;
     try{ localStorage.setItem(key, token); }catch(e){}
-    createSpace('Budget', ['budget'], '💰', 'sage', { budget: data.budget });
+    createSpace('Money Tracker', ['budget'], '💰', 'sage', { budget: data.budget });
   }, 1800);
 }
 importBudgetFromHash();
@@ -143,15 +143,16 @@ function importBudgetUpdateFromHash(){
   setTimeout(async () => {
     for(let i = 0; i < 20 && !store.spaces.length; i++) await new Promise(r => setTimeout(r, 300));
     const existing = store.spaces.find(s => (s.features || []).includes('budget') && !s.archived);
-    if(!confirm(existing ? 'Update your budget plan from this link? Your logged history stays.' : 'No budget space found. Create one from this link?')) return;
+    if(!confirm(existing ? 'Update your money tracker from this link? Your logged history stays.' : 'No money tracker found. Create one from this link?')) return;
     try{ localStorage.setItem('budgetUpdateDone', token); }catch(e){}
     try{
       if(existing){
-        await updateSpaceState(existing.id, st => { st.budget = buildBudget(st.budget, patch); });
+        await updateSpaceState(existing.id, st => { st.budget = buildBudget(st.budget, patch); if(patch.rename) st.title = String(patch.rename); });
+        if(patch.rename) await setSpaceName(existing.id, patch.rename);
         openSpace(existing.id);
-        alert('Budget plan updated!');
+        alert('Money tracker updated!');
       } else {
-        createSpace('Budget', ['budget'], '💰', 'sage', { budget: buildBudget(null, patch) });
+        createSpace('Money Tracker', ['budget'], '💰', 'sage', { budget: buildBudget(null, patch) });
       }
     }catch(e){
       console.error('budget update failed', e);
